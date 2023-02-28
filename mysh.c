@@ -42,13 +42,24 @@ int main (int argc, char** argv)
         scanf("%s", buff); // fetches the command (input for command would not have been read yet)
 
         // Search for command in command list
+        int found = 0;
         for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
         {
             if (strcmp(buff, commandList[i].name) == 0)
             {
                 commandList[i].func();
+                found = 1;
                 break;
             }
+        }
+
+        // If command not found
+        if (!found)
+        {
+            printf("Command not found\n");
+            
+            // Clear stdin input since cmd non-existant 
+            while (getchar() != '\n'){};
         }
         
     }
@@ -76,17 +87,13 @@ void shellExit()
 
 void echo()
 {
-    // Keep echoing until buff clear
-    char buff[MAX_INPUT];
-
-    fgets(buff, MAX_INPUT, stdin);
-
-    // Shift buff to remove space
-    for (int i = 0; i < MAX_INPUT-1; i++)
-    {
-        buff[i] = buff[i + 1];
-    }
-
-    // Do the echo
-    printf("%s", buff); // buff includes the newline character
+    char ch = getchar(); // skip the space
+    ch = getchar();
+    
+    while (ch != '\n'){
+        printf("%c", ch);
+        ch = getchar();
+    };
+    printf("\n");
+    
 };
