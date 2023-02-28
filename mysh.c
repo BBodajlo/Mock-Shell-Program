@@ -2,7 +2,62 @@
 #include <stdio.h>
 #include <string.h>
 
+#define MAX_INPUT 128 //Max size of input
+
 static int isInitialized = 0; //Static variable to keep track of if the shell has been initialized
+
+
+// Variables Main Needs 
+int exitStatus = 0;
+char path[MAX_INPUT] = "mysh"; 
+
+
+// Functions 
+void initialize();
+void shellExit();
+void echo();
+
+// Command struct
+struct command
+{
+    const char* name;
+    void (*func)();
+};
+
+// Command list
+struct command commandList[] = {
+    {"echo", echo},
+    {"exit", shellExit}
+};
+
+int main (int argc, char** argv)
+{
+
+    initialize(); //This will need to move once we get the batch mode working
+    char buff[MAX_INPUT]; //Simple start buffer for user input
+
+    while(exitStatus == 0) // Will probably just be set to while(1) later after logic is implemented
+    {
+        printf("%s> ", path); //After every command is input, the shell will give the newline prompt
+        scanf("%s", buff); // fetches the command (input for command would not have been read yet)
+
+        // Search for command in command list
+        for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
+        {
+            if (strcmp(buff, commandList[i].name) == 0)
+            {
+                commandList[i].func();
+                break;
+            }
+        }
+        
+    }
+
+    initialize(); //Checking to see if the initilization was called again (it wasn't)
+
+    return EXIT_SUCCESS;
+
+}
 
 void initialize()
 {
@@ -14,31 +69,24 @@ void initialize()
     isInitialized = 1; //Won't run any other time
 }
 
-
-
-int main (int argc, char** argv)
+void shellExit()
 {
+    exitStatus = 1;
+};
 
-    initialize(); //This will need to move once we get the batch mode working
-    int i = 0;
-    char buff[128]; //Simple start buffer for user input
-    while(i == 0) // Will probably just be set to while(1) later after logic is implemented
+void echo()
+{
+    // Keep echoing until buff clear
+    char buff[MAX_INPUT];
+
+    fgets(buff, MAX_INPUT, stdin);
+
+    // Shift buff to remove space
+    for (int i = 0; i < MAX_INPUT-1; i++)
     {
-        printf("mysh> "); //After every command is input, the shell will give the newline prompt
-        scanf("%s", buff);
-
-        if(strcmp(buff, "exit") == 0) //Will probably move to a different logic for exiting; simple for now
-        {
-            i = 1;
-        }
-        else
-        {
-            printf("ehco: %s\n", buff); //Just to make sure spacing worked out, the shell just ehcos back what is input
-        }
-
-        
+        buff[i] = buff[i + 1];
     }
 
-    initialize(); //Checking to see if the initilization was called again (it wasn't)
-
-}
+    // Do the echo
+    printf("%s", buff); // buff includes the newline character
+};
