@@ -21,7 +21,7 @@ void echo();
 struct command
 {
     const char* name;
-    void (*func)();
+    int (*func)();
 };
 
 // Command list
@@ -38,7 +38,14 @@ int main (int argc, char** argv)
 
     while(exitStatus == 0) // Will probably just be set to while(1) later after logic is implemented
     {
-        printf("%s> ", path); //After every command is input, the shell will give the newline prompt
+        int errStatus = 0;
+
+        if(errStatus){
+            printf("!%s> ", path); // Errored last time, so give the error prompt
+            errStatus = 0;
+        }else{
+            printf("%s> ", path); 
+        }
         scanf("%s", buff); // fetches the command (input for command would not have been read yet)
 
         // Search for command in command list
@@ -47,7 +54,7 @@ int main (int argc, char** argv)
         {
             if (strcmp(buff, commandList[i].name) == 0)
             {
-                commandList[i].func();
+                errStatus = commandList[i].func();
                 found = 1;
                 break;
             }
@@ -95,5 +102,5 @@ void echo()
         ch = getchar();
     };
     printf("\n");
-    
+
 };
