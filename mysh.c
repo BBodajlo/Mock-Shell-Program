@@ -12,7 +12,8 @@ static int isInitialized = 0; //Static variable to keep track of if the shell ha
 // Variables Main Needs 
 int exitStatus = 0;
 char path[MAX_INPUT] = "mysh"; 
-
+char** tokenArray; //Tokens that are parsed
+int numOfTokens; //Number of tokens parsed
 
 // Functions 
 void initialize();
@@ -52,21 +53,22 @@ int main (int argc, char** argv)
         }else{
             printf("%s> ", path); 
         }
-        scanf("%[^\n]", buff); // fetches the command (input for command would not have been read yet)
-        char **tokenArray = malloc(sizeof(char*)*MAX_INPUT);
+        //128 to indicate number of chars
+        scanf("%128[^\n]%*c", buff); // fetches the command (input for command would not have been read yet)
+        tokenArray = malloc(sizeof(char*)*MAX_INPUT);
         for(int i = 0; i < MAX_TOKENS; i++)
         {
             tokenArray[i] = (char*)malloc(MAX_TOKENS + 1);
         }
 
         tokenizer(tokenArray, buff);
-        printf("%s\n",tokenArray[0]);
-        printf("%s\n",tokenArray[1]);
+       // printf("%s\n",tokenArray[0]);
+        //printf("%s\n",tokenArray[1]);
         // Search for command in command list
         int found = 0;
         for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
         {
-            if (strcmp(buff, commandList[i].name) == 0)
+            if (strcmp(tokenArray[0], commandList[i].name) == 0)
             {
                 errStatus = commandList[i].func();
                 found = 1;
@@ -108,19 +110,27 @@ void shellExit()
 
 void echo()
 {
-    char ch = getchar(); // skip the space
-    ch = getchar();
-    
-    while (ch != '\n'){
-        printf("%c", ch);
-        ch = getchar();
-    };
+
+    for(int i = 1; i < numOfTokens; i++) //Searches through every token that is not the first command
+    {
+        printf("%s ", tokenArray[i]);
+    }
     printf("\n");
 
 };
 void pwd()
 {
+    char cwd[255]; //Think of a size
+    if(getcwd(cwd, sizeof(cwd)) == NULL) //Simply uses the getcwd command to get the current directory
+    {
+        printf("Error getting directory");
+    }
+    else
+    {
+        printf("%s\n", cwd);
+    }
 
+    
 };
 /*
 void tokenizer(char** input)
@@ -146,6 +156,10 @@ void tokenizer(char** tokens, char* buff)
     //Probably don't need a holder array; keeping for now
     char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
     int holderSpot = 0; //To increment the holder spot
+
+    //MAKE SURE NUMOFTOKENS IS CORRECT AMOUNT WHEN DEBUGGING!!!!!!!!
+    numOfTokens = 0; //May increment more than needed on edge cases
+
     for(int i = 0; i <= strlen(buff); i++) //Goes through the std in buffer
     {
        
@@ -155,6 +169,8 @@ void tokenizer(char** tokens, char* buff)
             holderSpot = 0; 
             memset(holder, 0, sizeof(holder)); //Reset the holder string
             tokenSpot +=1; //Next token
+            numOfTokens++;
+            
         }
         else{
             holder[holderSpot++] = buff[i];
@@ -164,7 +180,7 @@ void tokenizer(char** tokens, char* buff)
 
 }
 
-void freeTokens(char** arr)
+void freeTokens(char** arr) //Frees the tokens array
 {
     for(int i = 0; i < MAX_TOKENS; i++)
     {
