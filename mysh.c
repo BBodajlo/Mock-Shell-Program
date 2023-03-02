@@ -54,16 +54,19 @@ int main (int argc, char** argv)
             printf("%s> ", path); 
         }
         //128 to indicate number of chars
-        scanf("%128[^\n]%*c", buff); // fetches the command (input for command would not have been read yet)
+        //scanf("%128[^\n]%*c", buff); // fetches the command (input for command would not have been read yet)
         tokenArray = malloc(sizeof(char*)*MAX_INPUT);
         for(int i = 0; i < MAX_TOKENS; i++)
         {
             tokenArray[i] = (char*)malloc(MAX_TOKENS + 1);
+            memset(tokenArray[i], 0, sizeof(tokenArray[i]));
         }
 
         tokenizer(tokenArray, buff);
-       // printf("%s\n",tokenArray[0]);
-        //printf("%s\n",tokenArray[1]);
+        printf("%s\n",tokenArray[0]);
+        printf("%s\n",tokenArray[1]);
+        int a = strcmp(tokenArray[0], tokenArray[1]);
+        printf("%d\n", a);
         // Search for command in command list
         int found = 0;
         for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
@@ -80,9 +83,7 @@ int main (int argc, char** argv)
         if (!found)
         {
             printf("Command not found\n");
-            
-            // Clear stdin input since cmd non-existant 
-            while (getchar() != '\n'){};
+        
         }
         freeTokens(tokenArray); //Free token array 
     }
@@ -132,25 +133,42 @@ void pwd()
 
     
 };
-/*
-void tokenizer(char** input)
-{
-    char buffer[MAX_INPUT];
-    int bytes;
 
-    while((bytes = read(STDIN_FILENO, buffer, MAX_INPUT)) > 0)
+void tokenizer(char** tokens, char* buff)
+{
+
+    int bytes;
+    int tokenSpot = 0; //To increment to token array when a new token should be made
+    //Probably don't need a holder array; keeping for now
+    char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
+    memset(holder, 0, sizeof(holder));
+    int holderSpot = 0; //To increment the holder spot
+    fflush(STDIN_FILENO);
+    while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0)
     {
-        for(int i = 0; i < bytes; i++)
+        for(int i = 0; i <= bytes-1; i++)
         {
-            printf("%c", buffer[i]);
+            if(buff[i] == ' ' || i == bytes-1) //If the buffer has a space, or is at the end, finish the token and move to the next one
+            {
+                strcpy(tokens[tokenSpot], holder); //Copies the built token into the token array
+                holderSpot = 0; 
+                memset(holder, 0, sizeof(holder)); //Reset the holder string
+                tokenSpot +=1; //Next token
+                numOfTokens++;
+
+            }
+            else{
+            holder[holderSpot++] = buff[i];
+            }
         }
+        break;
     }
 
 
-};*/
+};
 
 //Takes the std in buffer and converts it into an array of tokens
-void tokenizer(char** tokens, char* buff)
+/*void tokenizer(char** tokens, char* buff)
 {
     int tokenSpot = 0; //To increment to token array when a new token should be made
     //Probably don't need a holder array; keeping for now
@@ -178,7 +196,7 @@ void tokenizer(char** tokens, char* buff)
         
     }
 
-}
+}*/
 
 void freeTokens(char** arr) //Frees the tokens array
 {
