@@ -141,8 +141,7 @@ void pwd()
 };
 
 
-
-void tokenizer()
+void tokenizer(int argc)
 {
     char buff[MAX_INPUT]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
@@ -153,7 +152,9 @@ void tokenizer()
     int holderSpot = 0; //To increment the holder spot
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
+    
 
+    
     while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0) //Will read the line given in iteract mode
     {
         for(int i = 0; i < bytes; i++) //Goes through every byte read
@@ -166,7 +167,12 @@ void tokenizer()
             {
                 isCommand = 1; //Next token should be a command
                 holder[holderSpot] = buff[i];
+                if(tokenList == NULL) //In case: | <> is the first input
+                {
+                    command = tokenList;
+                }
                 addToken(holder, command); //Adding the thing to the list
+                alterAndSetCommand(&command);
                 holderSpot = 0; 
                 memset(holder, 0, sizeof(holder)); //Reset the holder string
                 holder[0] = -1; //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
@@ -215,6 +221,7 @@ void alterAndSetCommand(tokenList_t **c)
 
 
 //Adding token to the end of the list; Token will always be insterted at the end 
+//Everything in a single function since all the tokenlist needs to do is add tokens one by one start from empty every iteration
 void addToken(char *token, tokenList_t *command)
 {
     tokenList_t *ptr;
