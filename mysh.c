@@ -32,6 +32,7 @@ void tokenizer();
 void addToken(char *token, tokenList_t *command);
 void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
+void batchTokenizer(int argc, char **argv);
 
 
 // Command struct
@@ -52,25 +53,37 @@ struct command commandList[] = {
 
 int main (int argc, char** argv)
 {
-
-    initialize(); //This will need to move once we get the batch mode working
+    if(argc < 2)
+    {
+        initialize(); //This will need to move once we get the batch mode working
+    }
+    
     char buff[MAX_INPUT]; //Simple start buffer for user input
-
+   
     while(exitStatus == 0) // Will probably just be set to while(1) later after logic is implemented
     {
         int errStatus = 0;
 
-        if(errStatus){
+        if(errStatus && argc < 2){
             printf("!%s> ", path); // Errored last time, so give the error prompt
             errStatus = 0;
-        }else{
+        }else if(argc < 2){
             printf("%s> ", path); 
         }
-
+        
         tokenList = NULL; //Just to make sure tokenList truly is null before using it again
 
         //Parse input (For interactive mode only atm)
-        tokenizer(); 
+        
+        if(argc < 2) //If there are commandline arguments, batch mode should run
+        {
+            tokenizer(); 
+        }
+        else{
+            
+            batchTokenizer(argc, argv);
+            exitStatus = 1; //Only one iteration needs to be run for batch mode
+        }
 
         
         // Search for command in command list
@@ -94,7 +107,6 @@ int main (int argc, char** argv)
         freeTokenList(); //Free token array 
     }
 
-    initialize(); //Checking to see if the initilization was called again (it wasn't)
 
     return EXIT_SUCCESS;
 
@@ -141,7 +153,7 @@ void pwd()
 };
 
 
-void tokenizer(int argc)
+void tokenizer()
 {
     char buff[MAX_INPUT]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
@@ -153,7 +165,7 @@ void tokenizer(int argc)
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
     
-
+    //ALTER TO CHECK IF AN ARGUMENT PASSED IS A FILE TO READ FROM AND CHANGE THE INPUT TO THAT FILE AND NOT STDIN
     
     while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0) //Will read the line given in iteract mode
     {
@@ -170,12 +182,16 @@ void tokenizer(int argc)
                 if(tokenList == NULL) //In case: | <> is the first input
                 {
                     command = tokenList;
-                }
-                addToken(holder, command); //Adding the thing to the list
-                alterAndSetCommand(&command);
+                    addToken(holder, command); //Adding the thing to the list
+                    alterAndSetCommand(&command);
+                } //To make | < > point to its self, take away else statement and take away the extra second add token
+                else{
+                    addToken(holder, command); //Adding the thing to the list
+                }    
                 holderSpot = 0; 
                 memset(holder, 0, sizeof(holder)); //Reset the holder string
-                holder[0] = -1; //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
+                holder[0] = -1;
+                     //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
                 }
             else if(holder[0] !=-1 || i == bytes) //If the buffer has a space, or buffer is not empty, finish the token and move to the next one
             {   
@@ -187,7 +203,7 @@ void tokenizer(int argc)
                 holder[0] = -1; //Probably change how to identify is string is empty :)
                 if(isCommand == 1) //This token should be a command and tokens after should point to it
                 {
-                    
+                    //SHOULD ONLY BE CALLED AFTER A TOKEN HAS BEEN ADDED
                     alterAndSetCommand(&command); //Needs to set the token's command pointer to the current node being made in the list done through addressing
                     isCommand = 0; //Will not make a new command until a | < > has been reached
                 }
@@ -201,6 +217,70 @@ void tokenizer(int argc)
 
 
 };
+
+//Read commandline arguments 
+void batchTokenizer(int argc, char **argv)
+{
+    int isCommand = 1; //To keep track of |s and to set a new command for args
+    tokenList_t *command = tokenList; //The command for the args following it which is a pointer to the command in the list
+    char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
+    memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
+    int holderSpot = 0; //To increment the holder spot
+   
+    for(int argNum = 1; argNum < argc; argNum++)//Goes through every commandline arg
+    {
+        //ADD A CHECK TO SEE IF ARGV IS A FILE AND IF IT IS PASS IT OFF TO TOKENIZER
+        //CHECK TO SEE IF YOU CAN OPEN A FILE BY SAID NAME
+
+        for(int i = 0; i <= strlen(argv[argNum]); i++) //Goes through every spot in each argument string
+        {
+            if(argv[argNum][i] != ' ' && argv[argNum][i] != '|' && argv[argNum][i] != '>' && argv[argNum][i] != '<' && argv[argNum][i] != '\n' && i != strlen(argv[argNum])) //Maybe make into a function if more are needed; to check which character are not to be 
+            {
+                holder[holderSpot++] = (char)argv[argNum][i];
+            }
+            else if(argv[argNum][i] == '|' || argv[argNum][i] == '>' || argv[argNum][i] == '<') //Moving to new command so set new command to next token
+            {
+                isCommand = 1; //Next token should be a command
+                holder[holderSpot] = argv[argNum][i];
+                if(tokenList == NULL) //In case: | <> is the first input
+                {
+                    command = tokenList;
+                    addToken(holder, command); //Adding the thing to the list
+                    alterAndSetCommand(&command);
+                } //To make | < > point to its self, take away else statement and take away the extra second add token
+                else{
+                    addToken(holder, command); //Adding the thing to the list
+                }    
+                holderSpot = 0; 
+                memset(holder, 0, sizeof(holder)); //Reset the holder string
+                holder[0] = -1;
+                     //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
+                }
+            else if(holder[0] !=-1 || i == strlen(argv[argNum]-1)) //If the buffer has a space, or buffer is not empty, finish the token and move to the next one
+            {   
+                
+                holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
+                addToken(holder, command); //Adding token to the list with the possible wrong command
+                holderSpot = 0; 
+                memset(holder, 0, sizeof(holder)); //Reset the holder string
+                holder[0] = -1; //Probably change how to identify is string is empty :)
+                if(isCommand == 1) //This token should be a command and tokens after should point to it
+                {
+                    //SHOULD ONLY BE CALLED AFTER A TOKEN HAS BEEN ADDED
+                    alterAndSetCommand(&command); //Needs to set the token's command pointer to the current node being made in the list done through addressing
+                    isCommand = 0; //Will not make a new command until a | < > has been reached
+                }
+                
+                
+
+            }
+        }
+        
+    }
+
+
+};
+
 
 //Need to set the command pointer when a new command is tokenized. Since it has to be the node currently being created, will use double pointers and set the memory spot outside of scope
 //Will only be called when a new command has already added to the token list
