@@ -9,19 +9,30 @@
 static int isInitialized = 0; //Static variable to keep track of if the shell has been initialized
 
 
+//TokenList linked list
+typedef struct tokenList{
+    char *token;
+    struct tokenList *command;
+    struct tokenList *next;
+}tokenList_t;
+
+
+
 // Variables Main Needs 
 int exitStatus = 0;
 char path[MAX_INPUT] = "mysh"; 
-char** tokenArray; //Tokens that are parsed
-int numOfTokens; //Number of tokens parsed
+tokenList_t *tokenList; //General token list
 
 // Functions 
 void initialize();
 void shellExit();
 void echo();
 void pwd();
-void tokenizer(char**, char*);
-void freeTokens(char**);
+void tokenizer();
+void addToken(char *token, tokenList_t *command);
+void freeTokenList();
+void alterAndSetCommand(tokenList_t **c);
+
 
 // Command struct
 struct command
@@ -29,6 +40,8 @@ struct command
     const char* name;
     int (*func)();
 };
+
+
 
 // Command list
 struct command commandList[] = {
@@ -53,25 +66,18 @@ int main (int argc, char** argv)
         }else{
             printf("%s> ", path); 
         }
-        //128 to indicate number of chars
-        //scanf("%128[^\n]%*c", buff); // fetches the command (input for command would not have been read yet)
-        tokenArray = malloc(sizeof(char*)*MAX_INPUT);
-        for(int i = 0; i < MAX_TOKENS; i++)
-        {
-            tokenArray[i] = (char*)malloc(MAX_TOKENS + 1);
-            memset(tokenArray[i], 0, sizeof(tokenArray[i]));
-        }
 
-        tokenizer(tokenArray, buff);
-        printf("%s\n",tokenArray[0]);
-        printf("%s\n",tokenArray[1]);
-        int a = strcmp(tokenArray[0], tokenArray[1]);
-        printf("%d\n", a);
+        tokenList = NULL; //Just to make sure tokenList truly is null before using it again
+
+        //Parse input (For interactive mode only atm)
+        tokenizer(); 
+
+        
         // Search for command in command list
         int found = 0;
         for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
         {
-            if (strcmp(tokenArray[0], commandList[i].name) == 0)
+            if (strcmp(tokenList->command->token, commandList[i].name) == 0)
             {
                 errStatus = commandList[i].func();
                 found = 1;
@@ -85,7 +91,7 @@ int main (int argc, char** argv)
             printf("Command not found\n");
         
         }
-        freeTokens(tokenArray); //Free token array 
+        freeTokenList(); //Free token array 
     }
 
     initialize(); //Checking to see if the initilization was called again (it wasn't)
@@ -111,12 +117,12 @@ void shellExit()
 
 void echo()
 {
-
-    for(int i = 1; i < numOfTokens; i++) //Searches through every token that is not the first command
+    tokenList_t *ptr = tokenList->next;
+    while(ptr != NULL)
     {
-        printf("%s ", tokenArray[i]);
+        printf("%s\n",ptr->token);
+        ptr = ptr->next;
     }
-    printf("\n");
 
 };
 void pwd()
@@ -134,31 +140,54 @@ void pwd()
     
 };
 
-void tokenizer(char** tokens, char* buff)
-{
 
-    int bytes;
-    int tokenSpot = 0; //To increment to token array when a new token should be made
-    //Probably don't need a holder array; keeping for now
+
+void tokenizer()
+{
+    char buff[MAX_INPUT]; //To store the line buffer into
+    int bytes; //Number of bytes from the buffer
+    int isCommand = 1; //To keep track of |s and to set a new command for args
+    tokenList_t *command = tokenList; //The command for the args following it which is a pointer to the command in the list
     char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
-    memset(holder, 0, sizeof(holder));
+    memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
     int holderSpot = 0; //To increment the holder spot
-    fflush(STDIN_FILENO);
-    while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0)
+
+    fflush(STDIN_FILENO); //Make sure std in is empty before getting input
+
+    while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0) //Will read the line given in iteract mode
     {
-        for(int i = 0; i <= bytes-1; i++)
+        for(int i = 0; i < bytes; i++) //Goes through every byte read
         {
-            if(buff[i] == ' ' || i == bytes-1) //If the buffer has a space, or is at the end, finish the token and move to the next one
+            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n') //Maybe make into a function if more are needed; to check which character are not to be 
             {
-                strcpy(tokens[tokenSpot], holder); //Copies the built token into the token array
+                holder[holderSpot++] = (char)buff[i];
+            }
+            else if(buff[i] == '|' || buff[i] == '>' || buff[i] == '<') //Moving to new command so set new command to next token
+            {
+                isCommand = 1; //Next token should be a command
+                holder[holderSpot] = buff[i];
+                addToken(holder, command); //Adding the thing to the list
                 holderSpot = 0; 
                 memset(holder, 0, sizeof(holder)); //Reset the holder string
-                tokenSpot +=1; //Next token
-                numOfTokens++;
+                holder[0] = -1; //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
+                }
+            else if(holder[0] !=-1 || i == bytes) //If the buffer has a space, or buffer is not empty, finish the token and move to the next one
+            {   
+                
+                holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
+                addToken(holder, command); //Adding token to the list with the possible wrong command
+                holderSpot = 0; 
+                memset(holder, 0, sizeof(holder)); //Reset the holder string
+                holder[0] = -1; //Probably change how to identify is string is empty :)
+                if(isCommand == 1) //This token should be a command and tokens after should point to it
+                {
+                    
+                    alterAndSetCommand(&command); //Needs to set the token's command pointer to the current node being made in the list done through addressing
+                    isCommand = 0; //Will not make a new command until a | < > has been reached
+                }
+                
+                
 
-            }
-            else{
-            holder[holderSpot++] = buff[i];
             }
         }
         break;
@@ -166,6 +195,83 @@ void tokenizer(char** tokens, char* buff)
 
 
 };
+
+//Need to set the command pointer when a new command is tokenized. Since it has to be the node currently being created, will use double pointers and set the memory spot outside of scope
+//Will only be called when a new command has already added to the token list
+void alterAndSetCommand(tokenList_t **c)
+{
+    if(*c == NULL) //Checking to see if this is the first command being made
+    {
+        *c = tokenList; //Set to the first token
+    }
+    else{
+        while((*c)->next != NULL) //Going through the token list until the last one which was currently added
+        {
+            *c = (*c)->next; //Also sets the command out side of this scope as well
+        }
+    }
+    (*c)->command = *c; //Setting the last token's command to itself
+}
+
+
+//Adding token to the end of the list; Token will always be insterted at the end 
+void addToken(char *token, tokenList_t *command)
+{
+    tokenList_t *ptr;
+    tokenList_t *tListP = NULL;
+    if(tokenList == NULL)
+    {
+        tokenList = (tokenList_t*)malloc(sizeof(tokenList_t));
+        ptr = tokenList;
+    }
+    else
+    {
+        tListP = tokenList;
+        while(tListP->next != NULL) //Find the next spot to add token in list
+        {
+            tListP = tListP->next;
+        }
+        ptr = (tokenList_t*)malloc(sizeof(tokenList_t));//Allocating size for the tokenList spot
+    }
+    
+    
+    
+
+    ptr->token = calloc(strlen(token)+1, 1); //Allocating space for string; +1 for terminator; 1 for size of items; initialized to 0 for strings
+    strcpy(ptr->token, token); //Copying string into the spot allocated
+
+    //memcpy(ptr->token, token, strlen(token)+1);
+
+    ptr->command = command;
+
+    ptr->next = NULL; //
+    if(tListP != NULL)
+    {
+        tListP->next = ptr;
+    }
+}
+
+
+void freeTokenList() //Need to free the strings allocated inside of each tokenList
+{
+    
+    if(tokenList == NULL) //There were no tokens at all
+    {
+        return;
+    }
+
+    while(tokenList != NULL)
+    {
+        tokenList_t *temp = tokenList;
+        free(temp->token);
+        tokenList = tokenList->next;
+        free(temp);
+    }
+
+}
+
+
+
 
 //Takes the std in buffer and converts it into an array of tokens
 /*void tokenizer(char** tokens, char* buff)
@@ -198,11 +304,3 @@ void tokenizer(char** tokens, char* buff)
 
 }*/
 
-void freeTokens(char** arr) //Frees the tokens array
-{
-    for(int i = 0; i < MAX_TOKENS; i++)
-    {
-        free(arr[i]);
-    }
-    free(arr);
-}
