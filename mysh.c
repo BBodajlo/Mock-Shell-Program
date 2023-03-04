@@ -22,13 +22,14 @@ typedef struct tokenList{
 int exitStatus = 0;
 char path[MAX_INPUT] = "mysh"; 
 tokenList_t *tokenList; //General token list
+int batchMode = 0;
 
 // Functions 
 void initialize();
 void shellExit();
 void echo();
 void pwd();
-void tokenizer();
+void tokenizer(int argc, char **argv);
 void addToken(char *token, tokenList_t *command);
 void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
@@ -60,7 +61,7 @@ int main (int argc, char** argv)
     
     char buff[MAX_INPUT]; //Simple start buffer for user input
    
-    while(exitStatus == 0) // Will probably just be set to while(1) later after logic is implemented
+    while(exitStatus == 0 && batchMode == 0) // Will probably just be set to while(1) later after logic is implemented
     {
         int errStatus = 0;
 
@@ -75,15 +76,9 @@ int main (int argc, char** argv)
 
         //Parse input (For interactive mode only atm)
         
-        if(argc < 2) //If there are commandline arguments, batch mode should run
-        {
-            tokenizer(); 
-        }
-        else{
-            
-            batchTokenizer(argc, argv);
-            exitStatus = 1; //Only one iteration needs to be run for batch mode
-        }
+            tokenizer(argc, argv); 
+        
+        
 
         
         // Search for command in command list
@@ -153,7 +148,7 @@ void pwd()
 };
 
 
-void tokenizer()
+void tokenizer(int argc, char **argv)
 {
     char buff[MAX_INPUT]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
@@ -164,14 +159,31 @@ void tokenizer()
     int holderSpot = 0; //To increment the holder spot
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
-    
-    //ALTER TO CHECK IF AN ARGUMENT PASSED IS A FILE TO READ FROM AND CHANGE THE INPUT TO THAT FILE AND NOT STDIN
-    
-    while((bytes = read(STDIN_FILENO, buff, MAX_INPUT)) > 0) //Will read the line given in iteract mode
+
+    int input; //Var for file descriptor for input
+
+    if(argc < 2) //Checking to see if the program was given arguments meaning batch mode was employed
     {
-        for(int i = 0; i < bytes; i++) //Goes through every byte read
+        input = STDIN_FILENO; //If no arguments, standard input is the input
+    }
+    else{
+        batchMode = 1; //To tell outer terminal loop that this is batch mode and should only run one command
+        if(access(argv[1], F_OK) == 0) //Probably instill some error checking
         {
-            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n') //Maybe make into a function if more are needed; to check which character are not to be 
+            input = open(argv[1], O_RDONLY);
+        }
+        else{
+            printf("Could not open file %s\n", argv[1]); //Place holder error message to not opening file
+            free(tokenList); //Free the token list for no seg fault
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+    while((bytes = read(input, buff, MAX_INPUT)) > 0) 
+    {
+        for(int i = 0; i <= bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
+        {
+            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 holder[holderSpot++] = (char)buff[i];
             }
@@ -193,9 +205,9 @@ void tokenizer()
                 holder[0] = -1;
                      //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
                 }
-            else if(holder[0] !=-1 || i == bytes) //If the buffer has a space, or buffer is not empty, finish the token and move to the next one
+            else if((argc < 2 && i != bytes) || holder[0] !=-1 || (argc > 2 && i == bytes)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
-                
+
                 holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
                 addToken(holder, command); //Adding token to the list with the possible wrong command
                 holderSpot = 0; 
@@ -218,7 +230,9 @@ void tokenizer()
 
 };
 
+//Stupid project requirements deem all of this code null and void
 //Read commandline arguments 
+/*
 void batchTokenizer(int argc, char **argv)
 {
     int isCommand = 1; //To keep track of |s and to set a new command for args
@@ -281,6 +295,7 @@ void batchTokenizer(int argc, char **argv)
 
 };
 
+*/
 
 //Need to set the command pointer when a new command is tokenized. Since it has to be the node currently being created, will use double pointers and set the memory spot outside of scope
 //Will only be called when a new command has already added to the token list
