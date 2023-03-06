@@ -41,7 +41,7 @@ int executeTokens();
 struct command
 {
     const char* name;
-    int (*func)();
+    void (*func)();
 };
 
 
@@ -141,8 +141,6 @@ int executeTokens(){
         if(command == NULL){
             ptr = ptr->next;
             continue;
-        }else{
-            printf("Command: %s", command->token);
         }
 
         // See if command is in command list
@@ -157,26 +155,28 @@ int executeTokens(){
         }
 
         if(!found){
+
             // Run command in child process
             pid_t pid = fork();
             
             if(pid == 0){ // Child process
-                // Create list of args
-                tokenList_t *tempptr = ptr->next;
-                int count = 0; 
+
+                // Make arg list
+                tokenList_t *tempptr = ptr;
+                int count = 0;
                 while(tempptr != NULL && tempptr->command == command){
                     count++;
                     tempptr = tempptr->next;
                 }
 
-                char *args[count]; 
-                ptr = ptr->next; // skip command
+                char *args[count+1];
                 for(int i = 0; i < count; i++){
                     args[i] = ptr->token;
                     ptr = ptr->next;
                 }
+                args[count] = NULL;
 
-                // Execute command
+                // Execute command                
                 int status = execvp(command->token, args);
                 if(status == -1){
                     printf("Error executing command %s\n", command->token);
