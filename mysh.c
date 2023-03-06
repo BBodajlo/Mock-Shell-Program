@@ -34,6 +34,7 @@ void addToken(char *token, tokenList_t *command);
 void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
 void batchTokenizer(int argc, char **argv);
+int executeTokens();
 
 
 // Command struct
@@ -76,29 +77,11 @@ int main (int argc, char** argv)
 
         //Parse input (For interactive mode only atm)
         
-            tokenizer(argc, argv); 
+        tokenizer(argc, argv); 
         
-        
+        //Execute command
+        executeTokens();
 
-        
-        // Search for command in command list
-        int found = 0;
-        for (int i = 0; i < sizeof(commandList) / sizeof(commandList[0]); i++)
-        {
-            if (strcmp(tokenList->command->token, commandList[i].name) == 0)
-            {
-                errStatus = commandList[i].func();
-                found = 1;
-                break;
-            }
-        }
-
-        // If command not found
-        if (!found)
-        {
-            printf("Command not found\n");
-        
-        }
         freeTokenList(); //Free token array 
     }
 
@@ -147,6 +130,77 @@ void pwd()
     
 };
 
+char* specialArgs[] = {"<", ">", "|"};
+int executeTokens(){
+    tokenList_t *ptr = tokenList; //Pointer to the token list
+    while(ptr != NULL){
+        
+        tokenList_t *command = ptr->command; //Pointer to the command
+        
+        // Skip special args for now
+        if(command == NULL){
+            ptr = ptr->next;
+            continue;
+        }else{
+            printf("Command: %s", command->token);
+        }
+
+        // See if command is in command list
+        int found = 0;
+        for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
+            if(strcmp(commandList[i].name, command->token) == 0){
+                commandList[i].func();
+                found = 1;
+                // DO THIS STUFF LATER!
+                break;
+            }
+        }
+
+        if(!found){
+            // Run command in child process
+            pid_t pid = fork();
+            
+            if(pid == 0){ // Child process
+                // Create list of args
+                tokenList_t *tempptr = ptr->next;
+                int count = 0; 
+                while(tempptr != NULL && tempptr->command == command){
+                    count++;
+                    tempptr = tempptr->next;
+                }
+
+                char *args[count]; 
+                ptr = ptr->next; // skip command
+                for(int i = 0; i < count; i++){
+                    args[i] = ptr->token;
+                    ptr = ptr->next;
+                }
+
+                // Execute command
+                int status = execvp(command->token, args);
+                if(status == -1){
+                    printf("Error executing command %s\n", command->token);
+                    return EXIT_FAILURE;
+                }
+            }else if(pid > 0){ // Parent process
+                // Wait for child to finish
+                int status;
+                waitpid(pid, &status, 0);
+            }else{
+                printf("Error forking process");
+                return EXIT_FAILURE;
+            }
+
+        }
+
+        // Move to next command
+        while(ptr != NULL && ptr->command == command){
+            ptr = ptr->next;
+        }
+    }
+
+    return 0;
+}
 
 void tokenizer(int argc, char **argv)
 {
@@ -198,7 +252,7 @@ void tokenizer(int argc, char **argv)
                     alterAndSetCommand(&command);
                 } //To make | < > point to its self, take away else statement and take away the extra second add token
                 else{
-                    addToken(holder, command); //Adding the thing to the list
+                    addToken(holder, NULL); //Adding the thing to the list
                 }    
                 holderSpot = 0; 
                 memset(holder, 0, sizeof(holder)); //Reset the holder string
@@ -336,15 +390,13 @@ void addToken(char *token, tokenList_t *command)
         ptr = (tokenList_t*)malloc(sizeof(tokenList_t));//Allocating size for the tokenList spot
     }
     
-    
-    
 
     ptr->token = calloc(strlen(token)+1, 1); //Allocating space for string; +1 for terminator; 1 for size of items; initialized to 0 for strings
     strcpy(ptr->token, token); //Copying string into the spot allocated
 
     //memcpy(ptr->token, token, strlen(token)+1);
 
-    ptr->command = command;
+    ptr->command = command; 
 
     ptr->next = NULL; //
     if(tListP != NULL)
