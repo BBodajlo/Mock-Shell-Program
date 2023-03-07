@@ -303,6 +303,7 @@ void tokenizer(int argc, char **argv)
         if(access(argv[1], F_OK) == 0) //Probably instill some error checking
         {
             input = open(argv[1], O_RDONLY);
+            //printf("here");
         }
         else{
             printf("Could not open file %s\n", argv[1]); //Place holder error message to not opening file
@@ -315,6 +316,7 @@ void tokenizer(int argc, char **argv)
     {
         for(int i = 0; i <= bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
         {
+           // printf("Buff : %c\n", buff[i]);
             if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 holder[holderSpot++] = (char)buff[i];
@@ -337,10 +339,11 @@ void tokenizer(int argc, char **argv)
                 holder[0] = -1;
                      //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
                 }
-            else if(((argc < 2 && i != bytes) || (argc > 2 && i == bytes)) && holder[0] !=-1) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
+            else if(((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
 
                 holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
+                //printf("Holder: %s", holder);
                 addToken(holder, command); //Adding token to the list with the possible wrong command
                 holderSpot = 0; 
                 memset(holder, 0, sizeof(holder)); //Reset the holder string
