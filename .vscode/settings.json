@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "mymalloc.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "windows.h": "c"
     }
 }

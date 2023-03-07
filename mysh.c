@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+
+
 #define MAX_INPUT 128 //Max size of input
 #define MAX_TOKENS 20 //Max amount of tokens on a single line to parse
 
@@ -259,7 +261,7 @@ void tokenizer(int argc, char **argv)
                 holder[0] = -1;
                      //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
                 }
-            else if((argc < 2 && i != bytes) || holder[0] !=-1 || (argc > 2 && i == bytes)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
+            else if(((argc < 2 && i != bytes) || (argc > 2 && i == bytes)) && holder[0] !=-1) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
 
                 holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
