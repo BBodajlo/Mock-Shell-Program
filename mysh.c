@@ -212,6 +212,7 @@ void tokenizer(int argc, char **argv)
     tokenList_t *command = tokenList; //The command for the args following it which is a pointer to the command in the list
     char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
     memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
+    holder[0] = -1; //So empty input is not accepted
     int holderSpot = 0; //To increment the holder spot
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
@@ -241,27 +242,59 @@ void tokenizer(int argc, char **argv)
         for(int i = 0; i <= bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
         {
            // printf("Buff : %c\n", buff[i]);
-            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
+            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 holder[holderSpot++] = (char)buff[i];
             }
-            else if(buff[i] == '|' || buff[i] == '>' || buff[i] == '<') //Moving to new command so set new command to next token
+            else if(buff[i] == '|' || buff[i] == '>' || buff[i] == '<' || buff[i] == '*') //Moving to new command so set new command to next token
             {
                 isCommand = 1; //Next token should be a command
-                holder[holderSpot] = buff[i];
-                if(tokenList == NULL) //In case: | <> is the first input
+                if(holder[0] == -1)
                 {
-                    command = tokenList;
-                    addToken(holder, command); //Adding the thing to the list
-                    alterAndSetCommand(&command);
-                } //To make | < > point to its self, take away else statement and take away the extra second add token
-                else{
-                    addToken(holder, NULL); //Adding the thing to the list
-                }    
-                holderSpot = 0; 
-                memset(holder, 0, sizeof(holder)); //Reset the holder string
-                holder[0] = -1;
+                    holder[holderSpot] = buff[i];
+                    if(tokenList == NULL) //In case: | <> is the first input
+                    {
+                        command = tokenList;
+                        addToken(holder, command); //Adding the thing to the list
+                        alterAndSetCommand(&command);
+                    } //To make | < > point to its self, take away else statement and take away the extra second add token
+                    else{
+                        addToken(holder, NULL); //Adding the thing to the list
+                    }    
+                    holderSpot = 0; 
+                    memset(holder, 0, sizeof(holder)); //Reset the holder string
+                    holder[0] = -1;
                      //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
+                }
+                else{
+                    if(tokenList == NULL) //In case: | <> is the first input
+                    {
+                        command = tokenList;
+                        addToken(holder, command); //Adding the thing to the list
+                        alterAndSetCommand(&command);
+                    } //To make | < > point to its self, take away else statement and take away the extra second add token
+                    else{
+                        addToken(holder, NULL); //Adding the thing to the list
+                    }    
+                    holderSpot = 0; 
+                    memset(holder, 0, sizeof(holder)); //Reset the holder string
+                    holder[0] = -1;
+                     
+
+                    holder[holderSpot] = buff[i];
+                    if(tokenList == NULL) //In case: | <> is the first input
+                    {
+                        command = tokenList;
+                        addToken(holder, command); //Adding the thing to the list
+                        alterAndSetCommand(&command);
+                    } //To make | < > point to its self, take away else statement and take away the extra second add token
+                    else{
+                        addToken(holder, NULL); //Adding the thing to the list
+                    }    
+                    holderSpot = 0; 
+                    memset(holder, 0, sizeof(holder)); //Reset the holder string
+                    holder[0] = -1;
+                    }
                 }
             else if(((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
