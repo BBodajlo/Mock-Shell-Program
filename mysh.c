@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 
 #define MAX_INPUT 128 //Max size of input
@@ -22,9 +23,10 @@ typedef struct tokenList{
 
 // Variables Main Needs 
 int exitStatus = 0;
-char path[MAX_INPUT] = "mysh"; 
+char programPath[MAX_INPUT] = "mysh"; 
 tokenList_t *tokenList; //General token list
 int batchMode = 0;
+int errStatus = 0;
 
 // Functions 
 void initialize();
@@ -37,6 +39,7 @@ void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
 void batchTokenizer(int argc, char **argv);
 int executeTokens();
+char* findPath(char *command);
 
 
 // Command struct
@@ -55,6 +58,10 @@ struct command commandList[] = {
     {"pwd", pwd}
 };
 
+// Path Options
+char *pathOptions[] = {"/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"};
+
+
 int main (int argc, char** argv)
 {
     if(argc < 2)
@@ -66,13 +73,12 @@ int main (int argc, char** argv)
    
     while(exitStatus == 0 && batchMode == 0) // Will probably just be set to while(1) later after logic is implemented
     {
-        int errStatus = 0;
 
         if(errStatus && argc < 2){
-            printf("!%s> ", path); // Errored last time, so give the error prompt
+            printf("!%s> ", programPath); // Errored last time, so give the error prompt
             errStatus = 0;
         }else if(argc < 2){
-            printf("%s> ", path); 
+            printf("%s> ", programPath); 
         }
         
         tokenList = NULL; //Just to make sure tokenList truly is null before using it again
@@ -163,6 +169,19 @@ int executeTokens(){
             
             if(pid == 0){ // Child process
 
+                // Find path
+                char *cmdDir = findPath(command->token);
+                if(cmdDir == NULL){
+                    perror("Command not found");
+                    exit(EXIT_FAILURE);
+                }
+
+                // Make path
+                char *cmdPath = malloc(strlen(cmdDir) + strlen(command->token) + 2);
+                strcpy(cmdPath, cmdDir);
+                strcat(cmdPath, "/");
+                strcat(cmdPath, command->token);
+
                 // Make arg list
                 tokenList_t *tempptr = ptr;
                 int count = 0;
@@ -179,15 +198,25 @@ int executeTokens(){
                 args[count] = NULL;
 
                 // Execute command                
-                int status = execvp(command->token, args);
+                int status = execv(cmdPath, args);                
+                free(cmdPath);
+
                 if(status == -1){
-                    printf("Error executing command %s\n", command->token);
-                    return EXIT_FAILURE;
+                    perror("Error executing command");
+                    exit(EXIT_FAILURE);
                 }
+
+                exit(EXIT_SUCCESS);
+
             }else if(pid > 0){ // Parent process
                 // Wait for child to finish
                 int status;
                 waitpid(pid, &status, 0);
+
+                if(WEXITSTATUS(status) == EXIT_FAILURE){
+                    errStatus = 1;
+                }
+                
             }else{
                 printf("Error forking process");
                 return EXIT_FAILURE;
@@ -202,6 +231,53 @@ int executeTokens(){
     }
 
     return 0;
+}
+
+char* findPath(char* commandName){
+
+    // Go through path options, use stat, find if file is exe
+    for(int i = 0; i < sizeof(pathOptions)/sizeof(pathOptions[0]); i++){
+        struct stat fileInfo;
+        char *myPath = pathOptions[i];
+        char *command = commandName;
+        char *newPath = malloc(strlen(myPath) + strlen(command) + 2);
+
+        // Check if malloc failed
+        if(newPath == NULL){
+            printf("Error allocating memory for path");
+            return NULL;
+        }
+
+        // Zeros
+        memset(newPath, 0, strlen(myPath) + strlen(command) + 2);
+
+        // Append command to path
+        strcat(newPath, myPath);
+        strcat(newPath, "/");
+        strcat(newPath, command);
+        
+        if(stat(newPath, &fileInfo) == -1){
+            // No file found
+            //printf("File %s not found... Countinuing\n", newPath);
+            free(newPath);
+            continue;
+        }
+
+        // See if file is executable
+        if(fileInfo.st_mode & S_IXUSR){
+            // File is executable
+            free(newPath);
+            return pathOptions[i];
+        }
+
+        // Dont continue if not executable
+        //printf("File %s is not executable\n", newPath);
+        free(newPath);
+        return NULL;
+
+    }
+
+    return NULL;
 }
 
 void tokenizer(int argc, char **argv)
