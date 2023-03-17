@@ -280,6 +280,28 @@ char* findPath(char* commandName){
     return NULL;
 }
 
+void pushToken(tokenList_t **command, char *holder)
+{
+    if(tokenList == NULL) //In case: | <> is the first input
+    {
+     *command = tokenList;
+     addToken(holder, *command); //Adding the thing to the list
+     alterAndSetCommand(command);
+    }
+    else{
+        addToken(holder, *command); //Adding the thing to the list
+    } 
+}
+
+void clearHolder(int *holderSpot, char *holder)
+{
+    *holderSpot = 0; 
+    memset(holder, 0, sizeof(holder)); //Reset the holder string
+    holder[0] = -1;
+}
+
+
+//TODO MAKE BUFFER HAVE A VARIABLE SIZE AND NOT STATIC
 void tokenizer(int argc, char **argv)
 {
     char buff[MAX_INPUT]; //To store the line buffer into
@@ -290,6 +312,7 @@ void tokenizer(int argc, char **argv)
     memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
     holder[0] = -1; //So empty input is not accepted
     int holderSpot = 0; //To increment the holder spot
+    int quoteTracker = 0;
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
 
@@ -320,73 +343,50 @@ void tokenizer(int argc, char **argv)
            // printf("Buff : %c\n", buff[i]);
             if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
-                holder[holderSpot++] = (char)buff[i];
+                
+                if((char)buff[i] == '"' && quoteTracker == 0)
+                {
+                    quoteTracker = 1;
+                }
+                else
+                {
+                    holder[holderSpot++] = (char)buff[i];
+                }
+                
             }
             else if(buff[i] == '|' || buff[i] == '>' || buff[i] == '<' || buff[i] == '*') //Moving to new command so set new command to next token
             {
                 isCommand = 1; //Next token should be a command
-                if(holder[0] == -1)
+                if(holder[0] == -1) //Looking for a special character as the first and only argument
                 {
                     holder[holderSpot] = buff[i];
-                    if(tokenList == NULL) //In case: | <> is the first input
-                    {
-                        command = tokenList;
-                        addToken(holder, command); //Adding the thing to the list
-                        alterAndSetCommand(&command);
-                    } //To make | < > point to its self, take away else statement and take away the extra second add token
-                    else{
-                        addToken(holder, NULL); //Adding the thing to the list
-                    }    
-                    holderSpot = 0; 
-                    memset(holder, 0, sizeof(holder)); //Reset the holder string
-                    holder[0] = -1;
-                     //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
+                    pushToken(&command, holder);      
+                    clearHolder(&holderSpot, holder);
                 }
                 else{
-                    if(tokenList == NULL) //In case: | <> is the first input
-                    {
-                        command = tokenList;
-                        addToken(holder, command); //Adding the thing to the list
-                        alterAndSetCommand(&command);
-                    } //To make | < > point to its self, take away else statement and take away the extra second add token
-                    else{
-                        addToken(holder, NULL); //Adding the thing to the list
-                    }    
-                    holderSpot = 0; 
-                    memset(holder, 0, sizeof(holder)); //Reset the holder string
-                    holder[0] = -1;
+                    pushToken(&command, holder); //current token is not a special character and needs to be pushed
+                    clearHolder(&holderSpot, holder);
                      
+                    holder[holderSpot] = buff[i]; //adding the special character next
 
-                    holder[holderSpot] = buff[i];
-                    if(tokenList == NULL) //In case: | <> is the first input
-                    {
-                        command = tokenList;
-                        addToken(holder, command); //Adding the thing to the list
-                        alterAndSetCommand(&command);
-                    } //To make | < > point to its self, take away else statement and take away the extra second add token
-                    else{
-                        addToken(holder, NULL); //Adding the thing to the list
-                    }    
-                    holderSpot = 0; 
-                    memset(holder, 0, sizeof(holder)); //Reset the holder string
-                    holder[0] = -1;
+                    pushToken(&command, holder);     
+                    clearHolder(&holderSpot, holder);
                     }
                 }
-            else if(((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
+            else if((((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) || ((char)buff[i] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
 
                 holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
                 //printf("Holder: %s", holder);
                 addToken(holder, command); //Adding token to the list with the possible wrong command
-                holderSpot = 0; 
-                memset(holder, 0, sizeof(holder)); //Reset the holder string
-                holder[0] = -1; //Probably change how to identify is string is empty :)
+                clearHolder(&holderSpot, holder);
                 if(isCommand == 1) //This token should be a command and tokens after should point to it
                 {
                     //SHOULD ONLY BE CALLED AFTER A TOKEN HAS BEEN ADDED
                     alterAndSetCommand(&command); //Needs to set the token's command pointer to the current node being made in the list done through addressing
                     isCommand = 0; //Will not make a new command until a | < > has been reached
                 }
+                quoteTracker = 0; //Should always be set to 0 since should only reach when it is 1 and relavent
                 
                 
 
