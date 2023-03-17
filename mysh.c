@@ -341,12 +341,18 @@ void tokenizer(int argc, char **argv)
         for(int i = 0; i <= bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
         {
            // printf("Buff : %c\n", buff[i]);
-            if(buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
+            if((buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') || quoteTracker == 1) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 
                 if((char)buff[i] == '"' && quoteTracker == 0)
                 {
                     quoteTracker = 1;
+                }
+                else if((char)buff[i] == '"' && quoteTracker == 1)
+                {
+                    quoteTracker = 0;
+                    pushToken(&command, holder);
+                    clearHolder(&holderSpot, holder);
                 }
                 else
                 {
