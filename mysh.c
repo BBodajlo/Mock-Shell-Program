@@ -302,12 +302,17 @@ void clearHolder(int *holderSpot, char *holder)
     memset(holder, 0, sizeof(holder)); //Reset the holder string
     holder[0] = -1;
 }
+/*Gets rid of garbage associated with realloc*/
+void memsetBuffer(char *holder, int holderspot, int holderBufferSize)
+{
+    for(int i = holderspot; i < holderBufferSize; i++) //Starts at the spot directly after the content already added
+    {
+        holder[i] = 0;
+    }
+}
 
 
 
-
-
-//TODO MAKE BUFFER HAVE A VARIABLE SIZE AND NOT STATIC
 void tokenizer(int argc, char **argv)
 {
     char buff[READ_BUFFER]; //To store the line buffer into
@@ -320,7 +325,8 @@ void tokenizer(int argc, char **argv)
     memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
     holder[0] = -1; //So empty input is not accepted
     int holderSpot = 0; //To increment the holder spot
-    int quoteTracker = 0;
+    int quoteTracker = 0; 
+    int escapeTracker = 0;
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
 
@@ -343,46 +349,58 @@ void tokenizer(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
     }
-    //TODO: Fix buffer from blocking
     while((bytes = read(input, buff, READ_BUFFER)) > 0) 
     {
-        for(int i = 0; i < bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
-        {
-           // printf("Buff : %c\n", buff[i]);
-            if((buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') || quoteTracker == 1) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
+           //If the \ is seen, the next character should be added no matter what
+            if(((buff[0] != ' ' && buff[0] != '|' && buff[0] != '>' && buff[0] != '<' && buff[0] != '\n' && buff[0] != '*') || quoteTracker == 1) || escapeTracker == 1) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 
-                if((char)buff[0] == '"' && quoteTracker == 0) //First occurence of a quote
+                if((char)buff[0] == '"' && quoteTracker == 0 && escapeTracker == 0) //First occurence of a quote
                 {
                     quoteTracker = 1; //When set to one, everything will be added to one token
                 }
-                else if((char)buff[0] == '"' && quoteTracker == 1) //The second occurence of a quote
+                else if((char)buff[0] == '"' && quoteTracker == 1 && escapeTracker == 0) //The second occurence of a quote
                 {
                     quoteTracker = 0; 
                     pushToken(&command, holder); //Push the entire token made from the quotes
                     clearHolder(&holderSpot, holder);
                 }
+                else if((char)buff[0] == '\\' && escapeTracker == 0) //If the \ is reached, then the tracker is set and next character will be added to token
+                {
+                    escapeTracker = 1;
+                }
+                else if((char)buff[0] == '\n') //Case for "\\n" where the \n should be ignored as stated by write up
+                {
+                    escapeTracker = 0;
+                }
                 else
                 {
-                    //TODO: CHECK TO SEE IF BUFFER IS FULL; IF IT IS, REALLOCATE IT TO A BIGGER SIZE
-                    if(holderSpot ==  holderBufferSize)
+                    escapeTracker = 0; //After the escape tracker is set, the next character should be added here and this is set to 0 to stop that
+                    //Logically should be holderSpot ==  holderBufferSize -1 but weird issue with it adding garbage data at holderspot == 7
+                    //Will make the buffer bigger by 2x each time it needs to be increased
+                    if(holderSpot ==  holderBufferSize -1) 
                     {
-                        holder = realloc(holder, holderBufferSize*2);
+                        holder = realloc(holder, holderBufferSize*2); 
                         holderBufferSize = holderBufferSize*2;
-                        holder[holderSpot++] = (char)buff[i];
+                        holder[holderSpot++] = (char)buff[0];
+                        memsetBuffer(holder, holderSpot, holderBufferSize); //Getting rid of garbage data from realloc
                     }
                     else{
-                    holder[holderSpot++] = (char)buff[i];
+                    holder[holderSpot++] = (char)buff[0];
                     }
                 }
                 
             }
-            else if(buff[0] == '|' || buff[0] == '>' || buff[0] == '<' || buff[0] == '*') //Moving to new command so set new command to next token
+            //Special character cases:
+            //If in the middle of a token, push current token, then push special character
+            //If just special character add it
+            //Both set is command to 1 to look for a new command
+            else if(buff[0] == '|' || buff[0] == '>' || buff[0] == '<' || buff[0] == '*') 
             {
                 isCommand = 1; //Next token should be a command
                 if(holder[0] == -1) //Looking for a special character as the first and only argument
                 {
-                    holder[holderSpot] = buff[i];
+                    holder[holderSpot] = buff[0];
                     pushToken(&command, holder);      
                     clearHolder(&holderSpot, holder);
                 }
@@ -390,17 +408,19 @@ void tokenizer(int argc, char **argv)
                     pushToken(&command, holder); //current token is not a special character and needs to be pushed
                     clearHolder(&holderSpot, holder);
                      
-                    holder[holderSpot] = buff[i]; //adding the special character next
+                    holder[holderSpot] = buff[0]; //adding the special character next
 
                     pushToken(&command, holder);     
                     clearHolder(&holderSpot, holder);
                     }
                 }
-            else if(((buff[0] == '\n' || buff[0] == ' ') && holder[0] !=-1 && quoteTracker == 0) || ((char)buff[0] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
+            //Token needs to be pushed at every space or end of the line
+            //Buffer should contain an actual character to be pushed i.e. not -1
+            //Should not push if in the middle of a quote and it sees a space or another else
+            //Should push if seeing the second quote no matter what
+            else if(((buff[0] == '\n' || buff[0] == ' ') && holder[0] !=-1 && quoteTracker == 0) || ((char)buff[0] == '"' && quoteTracker == 1)) 
             {   
-
                 //holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
-                //printf("Holder: %s", holder);
                 addToken(holder, command); //Adding token to the list with the possible wrong command
                 clearHolder(&holderSpot, holder);
                 if(isCommand == 1) //This token should be a command and tokens after should point to it
@@ -414,17 +434,19 @@ void tokenizer(int argc, char **argv)
                 
 
             }
-        }
+        
         //break;
 
-        //Temporary fix to stop the blocking
-        if(buff[0] == '\n')
+        //In interactive mode, there is always a \n at the end of a command so it should stop reading input
+        if(buff[0] == '\n' && argc < 2)
         {
             break;
         }
         
     }
-
+    //In batch mode, if at the end of the input the token should be pushed
+    //Should be a valid character and not -1
+    //Should not push if it was in the middle of a string, so only one "
     if(argc >= 2 && holder[0] != -1 && quoteTracker == 0) //The end of a file reaches here; if there is a token constructed, it should be pushed
     {
         addToken(holder, command); 
@@ -436,73 +458,6 @@ void tokenizer(int argc, char **argv)
 };
 
 
-//else if((((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) || ((char)buff[i] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
-//Stupid project requirements deem all of this code null and void
-//Read commandline arguments 
-/*
-void batchTokenizer(int argc, char **argv)
-{
-    int isCommand = 1; //To keep track of |s and to set a new command for args
-    tokenList_t *command = tokenList; //The command for the args following it which is a pointer to the command in the list
-    char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
-    memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
-    int holderSpot = 0; //To increment the holder spot
-   
-    for(int argNum = 1; argNum < argc; argNum++)//Goes through every commandline arg
-    {
-        //ADD A CHECK TO SEE IF ARGV IS A FILE AND IF IT IS PASS IT OFF TO TOKENIZER
-        //CHECK TO SEE IF YOU CAN OPEN A FILE BY SAID NAME
-
-        for(int i = 0; i <= strlen(argv[argNum]); i++) //Goes through every spot in each argument string
-        {
-            if(argv[argNum][i] != ' ' && argv[argNum][i] != '|' && argv[argNum][i] != '>' && argv[argNum][i] != '<' && argv[argNum][i] != '\n' && i != strlen(argv[argNum])) //Maybe make into a function if more are needed; to check which character are not to be 
-            {
-                holder[holderSpot++] = (char)argv[argNum][i];
-            }
-            else if(argv[argNum][i] == '|' || argv[argNum][i] == '>' || argv[argNum][i] == '<') //Moving to new command so set new command to next token
-            {
-                isCommand = 1; //Next token should be a command
-                holder[holderSpot] = argv[argNum][i];
-                if(tokenList == NULL) //In case: | <> is the first input
-                {
-                    command = tokenList;
-                    addToken(holder, command); //Adding the thing to the list
-                    alterAndSetCommand(&command);
-                } //To make | < > point to its self, take away else statement and take away the extra second add token
-                else{
-                    addToken(holder, command); //Adding the thing to the list
-                }    
-                holderSpot = 0; 
-                memset(holder, 0, sizeof(holder)); //Reset the holder string
-                holder[0] = -1;
-                     //Probably change how to identify is string is empty :) (Yes I copy and pasted this, sue me)
-                }
-            else if(holder[0] !=-1 || i == strlen(argv[argNum]-1)) //If the buffer has a space, or buffer is not empty, finish the token and move to the next one
-            {   
-                
-                holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
-                addToken(holder, command); //Adding token to the list with the possible wrong command
-                holderSpot = 0; 
-                memset(holder, 0, sizeof(holder)); //Reset the holder string
-                holder[0] = -1; //Probably change how to identify is string is empty :)
-                if(isCommand == 1) //This token should be a command and tokens after should point to it
-                {
-                    //SHOULD ONLY BE CALLED AFTER A TOKEN HAS BEEN ADDED
-                    alterAndSetCommand(&command); //Needs to set the token's command pointer to the current node being made in the list done through addressing
-                    isCommand = 0; //Will not make a new command until a | < > has been reached
-                }
-                
-                
-
-            }
-        }
-        
-    }
-
-
-};
-
-*/
 
 //Need to set the command pointer when a new command is tokenized. Since it has to be the node currently being created, will use double pointers and set the memory spot outside of scope
 //Will only be called when a new command has already added to the token list
@@ -580,34 +535,5 @@ void freeTokenList() //Need to free the strings allocated inside of each tokenLi
 
 
 
-//Takes the std in buffer and converts it into an array of tokens
-/*void tokenizer(char** tokens, char* buff)
-{
-    int tokenSpot = 0; //To increment to token array when a new token should be made
-    //Probably don't need a holder array; keeping for now
-    char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
-    int holderSpot = 0; //To increment the holder spot
 
-    //MAKE SURE NUMOFTOKENS IS CORRECT AMOUNT WHEN DEBUGGING!!!!!!!!
-    numOfTokens = 0; //May increment more than needed on edge cases
-
-    for(int i = 0; i <= strlen(buff); i++) //Goes through the std in buffer
-    {
-       
-        if(buff[i] == ' ' || i == strlen(buff)) //If the buffer has a space, or is at the end, finish the token and move to the next one
-        {
-            strcpy(tokens[tokenSpot], holder); //Copies the built token into the token array
-            holderSpot = 0; 
-            memset(holder, 0, sizeof(holder)); //Reset the holder string
-            tokenSpot +=1; //Next token
-            numOfTokens++;
-            
-        }
-        else{
-            holder[holderSpot++] = buff[i];
-        }
-        
-    }
-
-}*/
 
