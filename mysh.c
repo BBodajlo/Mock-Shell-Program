@@ -8,6 +8,8 @@
 
 #define MAX_INPUT 128 //Max size of input
 #define MAX_TOKENS 20 //Max amount of tokens on a single line to parse
+#define READ_BUFFER 1
+#define TOKEN_INIT 8
 
 static int isInitialized = 0; //Static variable to keep track of if the shell has been initialized
 
@@ -280,6 +282,7 @@ char* findPath(char* commandName){
     return NULL;
 }
 
+/*Used when a token should be comeplete and added to the list */
 void pushToken(tokenList_t **command, char *holder)
 {
     if(tokenList == NULL) //In case: | <> is the first input
@@ -292,7 +295,7 @@ void pushToken(tokenList_t **command, char *holder)
         addToken(holder, *command); //Adding the thing to the list
     } 
 }
-
+/*Used to clear the string that holds the constructed token*/
 void clearHolder(int *holderSpot, char *holder)
 {
     *holderSpot = 0; 
@@ -301,14 +304,19 @@ void clearHolder(int *holderSpot, char *holder)
 }
 
 
+
+
+
 //TODO MAKE BUFFER HAVE A VARIABLE SIZE AND NOT STATIC
 void tokenizer(int argc, char **argv)
 {
-    char buff[MAX_INPUT]; //To store the line buffer into
+    char buff[READ_BUFFER]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
     int isCommand = 1; //To keep track of |s and to set a new command for args
     tokenList_t *command = tokenList; //The command for the args following it which is a pointer to the command in the list
-    char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
+    //char holder[MAX_INPUT]; //Holder string to keep track of the current token being made
+    char *holder = malloc(sizeof(char)*TOKEN_INIT); //Holder string to keep track of the current token being made
+    int holderBufferSize = TOKEN_INIT;
     memset(holder, 0, sizeof(holder)); //Make sure the string holder is all 0's so no weird data
     holder[0] = -1; //So empty input is not accepted
     int holderSpot = 0; //To increment the holder spot
@@ -335,32 +343,41 @@ void tokenizer(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
     }
-    
-    while((bytes = read(input, buff, MAX_INPUT)) > 0) 
+    //TODO: Fix buffer from blocking
+    while((bytes = read(input, buff, READ_BUFFER)) > 0) 
     {
-        for(int i = 0; i <= bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
+        for(int i = 0; i < bytes; i++) //Goes through every byte read + 1 due to files not containing a \n hence the if statements for both argc cases
         {
            // printf("Buff : %c\n", buff[i]);
             if((buff[i] != ' ' && buff[i] != '|' && buff[i] != '>' && buff[i] != '<' && buff[i] != '\n' && i != bytes && buff[i] != '*') || quoteTracker == 1) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 
-                if((char)buff[i] == '"' && quoteTracker == 0)
+                if((char)buff[0] == '"' && quoteTracker == 0) //First occurence of a quote
                 {
-                    quoteTracker = 1;
+                    quoteTracker = 1; //When set to one, everything will be added to one token
                 }
-                else if((char)buff[i] == '"' && quoteTracker == 1)
+                else if((char)buff[0] == '"' && quoteTracker == 1) //The second occurence of a quote
                 {
-                    quoteTracker = 0;
-                    pushToken(&command, holder);
+                    quoteTracker = 0; 
+                    pushToken(&command, holder); //Push the entire token made from the quotes
                     clearHolder(&holderSpot, holder);
                 }
                 else
                 {
+                    //TODO: CHECK TO SEE IF BUFFER IS FULL; IF IT IS, REALLOCATE IT TO A BIGGER SIZE
+                    if(holderSpot ==  holderBufferSize)
+                    {
+                        holder = realloc(holder, holderBufferSize*2);
+                        holderBufferSize = holderBufferSize*2;
+                        holder[holderSpot++] = (char)buff[i];
+                    }
+                    else{
                     holder[holderSpot++] = (char)buff[i];
+                    }
                 }
                 
             }
-            else if(buff[i] == '|' || buff[i] == '>' || buff[i] == '<' || buff[i] == '*') //Moving to new command so set new command to next token
+            else if(buff[0] == '|' || buff[0] == '>' || buff[0] == '<' || buff[0] == '*') //Moving to new command so set new command to next token
             {
                 isCommand = 1; //Next token should be a command
                 if(holder[0] == -1) //Looking for a special character as the first and only argument
@@ -379,10 +396,10 @@ void tokenizer(int argc, char **argv)
                     clearHolder(&holderSpot, holder);
                     }
                 }
-            else if((((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) || ((char)buff[i] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
+            else if(((buff[0] == '\n' || buff[0] == ' ') && holder[0] !=-1 && quoteTracker == 0) || ((char)buff[0] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
             {   
 
-                holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
+                //holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
                 //printf("Holder: %s", holder);
                 addToken(holder, command); //Adding token to the list with the possible wrong command
                 clearHolder(&holderSpot, holder);
@@ -398,12 +415,28 @@ void tokenizer(int argc, char **argv)
 
             }
         }
-        break;
+        //break;
+
+        //Temporary fix to stop the blocking
+        if(buff[0] == '\n')
+        {
+            break;
+        }
+        
     }
 
-
+    if(argc >= 2 && holder[0] != -1 && quoteTracker == 0) //The end of a file reaches here; if there is a token constructed, it should be pushed
+    {
+        addToken(holder, command); 
+        if(isCommand == 1)
+        {
+            alterAndSetCommand(&command); 
+        }
+    }
 };
 
+
+//else if((((argc < 2 && i != bytes) || (argc >= 2)) && holder[0] !=-1) || ((char)buff[i] == '"' && quoteTracker == 1)) //If in interact mode and not at the + 1 byte, or something was actually input, or in batch mode and at the final char to push it
 //Stupid project requirements deem all of this code null and void
 //Read commandline arguments 
 /*
