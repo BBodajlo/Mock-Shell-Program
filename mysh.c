@@ -27,7 +27,9 @@ typedef struct tokenList{
 int exitStatus = 0;
 char programPath[MAX_INPUT] = "mysh"; 
 tokenList_t *tokenList; //General token list
-int batchMode = 0;
+int batchMode = 0; //To stop the execution loop
+int batch = 0; //For tokenizer to know that batch mode is being used and to keep reading the file
+int input; //Var for file descriptor for input in tokenizer
 int errStatus = 0;
 
 // Functions 
@@ -86,12 +88,11 @@ int main (int argc, char** argv)
         tokenList = NULL; //Just to make sure tokenList truly is null before using it again
 
         //Parse input (For interactive mode only atm)
-        
         tokenizer(argc, argv); 
         
         //Execute command
         executeTokens();
-
+        
         freeTokenList(); //Free token array 
     }
 
@@ -315,6 +316,7 @@ void memsetBuffer(char *holder, int holderspot, int holderBufferSize)
 
 void tokenizer(int argc, char **argv)
 {
+    
     char buff[READ_BUFFER]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
     int isCommand = 1; //To keep track of |s and to set a new command for args
@@ -330,14 +332,14 @@ void tokenizer(int argc, char **argv)
 
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
 
-    int input; //Var for file descriptor for input
-
+    
+    
     if(argc < 2) //Checking to see if the program was given arguments meaning batch mode was employed
     {
         input = STDIN_FILENO; //If no arguments, standard input is the input
     }
-    else{
-        batchMode = 1; //To tell outer terminal loop that this is batch mode and should only run one command
+    else if(batch == 0){
+        batch = 1; //Telling the tokeizer loop to coninute reading the file given instead of reopening it
         if(access(argv[1], F_OK) == 0) //Probably instill some error checking
         {
             input = open(argv[1], O_RDONLY);
@@ -349,6 +351,7 @@ void tokenizer(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
     }
+    
     while((bytes = read(input, buff, READ_BUFFER)) > 0) 
     {
            //If the \ is seen, the next character should be added no matter what
@@ -438,7 +441,7 @@ void tokenizer(int argc, char **argv)
         //break;
 
         //In interactive mode, there is always a \n at the end of a command so it should stop reading input
-        if(buff[0] == '\n' && argc < 2)
+        if(buff[0] == '\n')
         {
             break;
         }
@@ -447,12 +450,16 @@ void tokenizer(int argc, char **argv)
     //In batch mode, if at the end of the input the token should be pushed
     //Should be a valid character and not -1
     //Should not push if it was in the middle of a string, so only one "
-    if(argc >= 2 && holder[0] != -1 && quoteTracker == 0) //The end of a file reaches here; if there is a token constructed, it should be pushed
+    if(argc >= 2 && bytes == 0) //The end of a file reaches here; should be batch mode and end of file with 0 bytes
     {
-        addToken(holder, command); 
-        if(isCommand == 1)
+        batchMode = 1; //Indicating to outer execution loop to stop after this command
+        if(holder[0] != -1 && quoteTracker == 0) //If there is still a valid token, push it
         {
-            alterAndSetCommand(&command); 
+            addToken(holder, command); 
+            if(isCommand == 1)
+            {
+                alterAndSetCommand(&command); 
+            }
         }
     }
 };
