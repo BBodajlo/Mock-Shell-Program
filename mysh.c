@@ -19,6 +19,7 @@ typedef struct tokenList{
     char *token;
     struct tokenList *command;
     struct tokenList *next;
+    struct tokenList *prev;
 }tokenList_t;
 
 
@@ -31,6 +32,7 @@ int batchMode = 0; //To stop the execution loop
 int batch = 0; //For tokenizer to know that batch mode is being used and to keep reading the file
 int input; //Var for file descriptor for input in tokenizer
 int errStatus = 0;
+tokenList_t *previousToken = NULL;
 
 // Functions 
 void initialize();
@@ -137,7 +139,7 @@ void pwd()
     {
         printf("%s\n", cwd);
     }
-
+    
     
 };
 
@@ -329,7 +331,7 @@ void tokenizer(int argc, char **argv)
     int holderSpot = 0; //To increment the holder spot
     int quoteTracker = 0; 
     int escapeTracker = 0;
-
+    
     fflush(STDIN_FILENO); //Make sure std in is empty before getting input
 
     
@@ -514,10 +516,14 @@ void addToken(char *token, tokenList_t *command)
     ptr->command = command; 
 
     ptr->next = NULL; //
+    ptr->prev = previousToken;
+    previousToken = ptr;
     if(tListP != NULL)
     {
         tListP->next = ptr;
     }
+    
+
 }
 
 
