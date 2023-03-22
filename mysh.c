@@ -35,6 +35,7 @@ void initialize();
 void shellExit();
 void echo();
 void pwd();
+void cd();
 void tokenizer(int argc, char **argv);
 void addToken(char *token, tokenList_t *command);
 void freeTokenList();
@@ -57,7 +58,8 @@ struct command
 struct command commandList[] = {
     {"echo", echo},
     {"exit", shellExit},
-    {"pwd", pwd}
+    {"pwd", pwd},
+    {"cd", cd}
 };
 
 // Path Options
@@ -125,6 +127,20 @@ void echo()
     }
 
 };
+
+void cd(){
+    tokenList_t *ptr = tokenList->next;
+    if(ptr == NULL){
+        printf("No directory specified");
+        return;
+    }
+
+    char *dir = ptr->token;
+    if(chdir(dir) == -1){ 
+        perror("Error changing directory");
+    }
+}
+
 void pwd()
 {
     char cwd[255]; //Think of a size
