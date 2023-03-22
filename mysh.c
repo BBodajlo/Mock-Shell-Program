@@ -16,10 +16,10 @@ static int isInitialized = 0; //Static variable to keep track of if the shell ha
 
 //TokenList linked list
 typedef struct tokenList{
-    char *token;
-    struct tokenList *command;
-    struct tokenList *next;
-    struct tokenList *prev;
+   char *token;
+   struct tokenList *command;
+   struct tokenList *next;
+   struct tokenList *prev;
 }tokenList_t;
 
 
@@ -48,6 +48,11 @@ void batchTokenizer(int argc, char **argv);
 int executeTokens();
 char* findPath(char *command);
 
+//Testing functions
+void echoSyn();
+void echoCommand();
+void echoNext();
+void echoPrev();
 
 // Command struct
 struct command
@@ -63,7 +68,11 @@ struct command commandList[] = {
     {"echo", echo},
     {"exit", shellExit},
     {"pwd", pwd},
-    {"cd", cd}
+    {"cd", cd},
+    {"echoSyn", echoSyn},
+    {"echoCommand", echoCommand},
+    {"echoNext", echoNext},
+    {"echoPrev", echoPrev},
 };
 
 // Path Options
@@ -95,6 +104,7 @@ int main (int argc, char** argv)
         tokenizer(argc, argv); 
         
         //Execute command
+        //echoSyn();
         executeTokens();
         
         freeTokenList(); //Free token array 
@@ -158,6 +168,70 @@ void pwd()
     
     
 };
+/*Testing functions*/
+void echoSyn()
+{
+    tokenList_t *ptr = tokenList->next;
+    while(ptr != NULL)
+    {
+        printf("T: %s ",ptr->token);
+        ptr = ptr->next;
+    }
+    printf("\n");
+
+}
+
+void echoCommand()
+{
+    tokenList_t *ptr = tokenList->next;
+    while(ptr != NULL)
+    {
+        printf("%s ",ptr->command->token);
+        ptr = ptr->next;
+    }
+    printf("\n");
+
+}
+
+void echoNext()
+{
+    tokenList_t *ptr = tokenList;
+    while(ptr != NULL)
+    {
+        if(ptr->next == NULL)
+        {
+            printf("NULL ");
+            ptr = ptr->next;
+        }
+        else{
+            printf("%s ",ptr->next->token);
+            ptr = ptr->next;
+        }
+    }
+    printf("\n");
+
+}
+
+void echoPrev()
+{
+    tokenList_t *ptr = tokenList;
+    while(ptr != NULL)
+    {
+        if(ptr->prev == NULL)
+        {
+            printf("NULL ");
+            ptr = ptr->next;
+        }
+        else{
+            printf("%s ",ptr->prev->token);
+            ptr = ptr->next;
+        }
+    }
+    printf("\n");
+
+}
+
+
 
 char* specialArgs[] = {"<", ">", "|"};
 int executeTokens(){
@@ -183,7 +257,7 @@ int executeTokens(){
             }
         }
 
-        if(!found){
+        /*if(!found){
 
             // Run command in child process
             pid_t pid = fork();
@@ -243,7 +317,7 @@ int executeTokens(){
                 return EXIT_FAILURE;
             }
 
-        }
+        }*/
 
         // Move to next command
         while(ptr != NULL && ptr->command == command){
@@ -304,6 +378,7 @@ char* findPath(char* commandName){
 /*Used when a token should be comeplete and added to the list */
 void pushToken(tokenList_t **command, char *holder)
 {
+    
     if(tokenList == NULL) //In case: | <> is the first input
     {
      *command = tokenList;
@@ -334,7 +409,7 @@ void memsetBuffer(char *holder, int holderspot, int holderBufferSize)
 
 void tokenizer(int argc, char **argv)
 {
-    
+
     char buff[READ_BUFFER]; //To store the line buffer into
     int bytes; //Number of bytes from the buffer
     int isCommand = 1; //To keep track of |s and to set a new command for args
@@ -347,14 +422,16 @@ void tokenizer(int argc, char **argv)
     int holderSpot = 0; //To increment the holder spot
     int quoteTracker = 0; 
     int escapeTracker = 0;
+    previousToken = NULL; // Resetting previous token for new stream
     
-    fflush(STDIN_FILENO); //Make sure std in is empty before getting input
+    
 
     
     
     if(argc < 2) //Checking to see if the program was given arguments meaning batch mode was employed
     {
         input = STDIN_FILENO; //If no arguments, standard input is the input
+        fflush(STDIN_FILENO); //Make sure std in is empty before getting input
     }
     else if(batch == 0){
         batch = 1; //Telling the tokeizer loop to coninute reading the file given instead of reopening it
@@ -372,8 +449,17 @@ void tokenizer(int argc, char **argv)
     
     while((bytes = read(input, buff, READ_BUFFER)) > 0) 
     {
+          //  if((char)buff[0] == '\n')
+          //  {
+          //      printf("true\n");
+          //  }
+          //  else{
+           //     printf("false\n");
+           // }
+           // printf("char: %d\n",buff[0]);
+            //printf("Escape Traker == %d\n", escapeTracker);
            //If the \ is seen, the next character should be added no matter what
-            if(((buff[0] != ' ' && buff[0] != '|' && buff[0] != '>' && buff[0] != '<' && buff[0] != '\n' && buff[0] != '*') || quoteTracker == 1) || escapeTracker == 1) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
+            if(((buff[0] != ' ' && buff[0] != '|' && buff[0] != '>' && buff[0] != '<' && buff[0] != '\n' && buff[0] != '*' && buff[0] != '\n') || quoteTracker == 1) || (escapeTracker == 1 && buff[0] != '\n')) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 
                 if((char)buff[0] == '"' && quoteTracker == 0 && escapeTracker == 0) //First occurence of a quote
@@ -388,14 +474,12 @@ void tokenizer(int argc, char **argv)
                 }
                 else if((char)buff[0] == '\\' && escapeTracker == 0) //If the \ is reached, then the tracker is set and next character will be added to token
                 {
+                    //printf("Here in escape\n");
                     escapeTracker = 1;
                 }
-                else if((char)buff[0] == '\n') //Case for "\\n" where the \n should be ignored as stated by write up
+                else if(buff[0] != 13)
                 {
-                    escapeTracker = 0;
-                }
-                else
-                {
+                   // printf("here in push\n");
                     escapeTracker = 0; //After the escape tracker is set, the next character should be added here and this is set to 0 to stop that
                     //Logically should be holderSpot ==  holderBufferSize -1 but weird issue with it adding garbage data at holderspot == 7
                     //Will make the buffer bigger by 2x each time it needs to be increased
@@ -439,7 +523,7 @@ void tokenizer(int argc, char **argv)
             //Buffer should contain an actual character to be pushed i.e. not -1
             //Should not push if in the middle of a quote and it sees a space or another else
             //Should push if seeing the second quote no matter what
-            else if(((buff[0] == '\n' || buff[0] == ' ') && holder[0] !=-1 && quoteTracker == 0) || ((char)buff[0] == '"' && quoteTracker == 1)) 
+            else if((((buff[0] == '\n' && escapeTracker == 0)|| buff[0] == ' ') && holder[0] !=-1 && quoteTracker == 0) || ((char)buff[0] == '"' && quoteTracker == 1)) 
             {   
                 //holder[holderSpot] = '\0'; //Completing the strings; Not sure if actually needed
                 addToken(holder, command); //Adding token to the list with the possible wrong command
@@ -459,8 +543,21 @@ void tokenizer(int argc, char **argv)
         //break;
 
         //In interactive mode, there is always a \n at the end of a command so it should stop reading input
-        if(buff[0] == '\n')
+        
+        if(buff[0] == '\n' && escapeTracker == 1 && batch == 1){
+            escapeTracker = 0;
+            //printf("here");
+        }
+        else if(buff[0] == '\n')
         {
+            if(holder[0] != -1 && quoteTracker == 0) //In the case of an escape charactera at the end of a stream, the token should be pushed 
+            {
+                addToken(holder, command); 
+                if(isCommand == 1)
+                {
+                    alterAndSetCommand(&command); 
+                }
+            }
             break;
         }
         

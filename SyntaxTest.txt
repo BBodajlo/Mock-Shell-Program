@@ -1,0 +1,18 @@
+echoSyn foo bar
+echoSyn foo |bar
+echoSyn foo|bar
+echoSyn "foo < bar"
+echoSyn "foo bar
+echoSyn foo bar "
+echoCommand foo bar
+echoCommand foo bar | baz loo
+echoNext foo bar | baz "qux quux" > thud
+echoPrev foo bar | baz < qux
+echoSyn fo\o
+echoSyn foo\ baz
+echoSyn foo\| baz
+echoSyn "foo\| \" baz" 
+echoSyn foo\\ bar
+echoSyn foo bar\ baz\<qu\ux\\>spam
+echoSyn hello\
+cat text.txt

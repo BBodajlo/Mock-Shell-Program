@@ -11,7 +11,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/mysh.exe", //path to your programs exe and exe name
-            "args": ["text.txt"],
+            "args": ["SyntaxTest.txt"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
