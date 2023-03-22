@@ -257,7 +257,7 @@ int executeTokens(){
             }
         }
 
-        /*if(!found){
+        if(!found){
 
             // Run command in child process
             pid_t pid = fork();
@@ -317,7 +317,7 @@ int executeTokens(){
                 return EXIT_FAILURE;
             }
 
-        }*/
+        }
 
         // Move to next command
         while(ptr != NULL && ptr->command == command){
