@@ -4,6 +4,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/dir.h>
+#include <dirent.h>
+#include <fnmatch.h>
 
 
 #define MAX_INPUT 128 //Max size of input
@@ -22,6 +26,11 @@ typedef struct tokenList{
    struct tokenList *prev;
 }tokenList_t;
 
+typedef struct wildcardList{
+    char *token;
+    struct wildcardList *next;
+}wildcardList_t;
+
 
 
 // Variables Main Needs 
@@ -36,39 +45,38 @@ tokenList_t *previousToken = NULL;
 
 // Functions 
 void initialize();
-void shellExit();
-void echo();
-void pwd();
-void cd();
+int shellExit(tokenList_t *command);
+int pwd(tokenList_t *command);
+int cd(tokenList_t *command);
+
 void tokenizer(int argc, char **argv);
 void addToken(char *token, tokenList_t *command);
 void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
-void batchTokenizer(int argc, char **argv);
-int executeTokens();
-char* findPath(char *command);
+int executeTokens(tokenList_t *start, tokenList_t *end, int in, int out);
+void wildcardHandler();
+char* findPathCommand(char *command);
 
 //Testing functions
-void echoSyn();
-void echoCommand();
-void echoNext();
-void echoPrev();
+int echoSyn();
+int echoCommand();
+int echoNext();
+int echoPrev();
 
 // Command struct
 struct command
 {
     const char* name;
-    void (*func)();
+    int (*func)();
 };
-
 
 
 // Command list
 struct command commandList[] = {
-    {"echo", echo},
     {"exit", shellExit},
     {"pwd", pwd},
     {"cd", cd},
+
     {"echoSyn", echoSyn},
     {"echoCommand", echoCommand},
     {"echoNext", echoNext},
@@ -102,14 +110,35 @@ int main (int argc, char** argv)
 
         //Parse input (For interactive mode only atm)
         tokenizer(argc, argv); 
+
+        if (tokenList == NULL)
+        {
+            continue;
+        }
         
+        // Handle Wildcards 
+        wildcardHandler();
+
         //Execute command
         //echoSyn();
-        executeTokens();
         
-        freeTokenList(); //Free token array 
-    }
+        // Reach end of token list to send that ptr
+        tokenList_t *ptr = tokenList;
+        while(ptr->next != NULL)
+        {
+            ptr = ptr->next;
+        }
+        
+        // Execute
+        int cmdStatus = executeTokens(tokenList, ptr, STDIN_FILENO, STDOUT_FILENO);
+        if (cmdStatus == 1)
+        {
+            errStatus = 1;
+        }
 
+        // Free token list
+        freeTokenList(); 
+    }
 
     return EXIT_SUCCESS;
 
@@ -125,9 +154,10 @@ void initialize()
     isInitialized = 1; //Won't run any other time
 }
 
-void shellExit()
+int shellExit(tokenList_t *command)
 {
     exitStatus = 1;
+    return 0;
 };
 
 void echo()
@@ -141,35 +171,41 @@ void echo()
 
 };
 
-void cd(){
-    tokenList_t *ptr = tokenList->next;
+int cd(tokenList_t *command){
+    
+    tokenList_t *ptr = command->next;
     if(ptr == NULL){
-        printf("No directory specified");
-        return;
+        printf("No Directory Specified!\n");
+        return 1;
     }
 
     char *dir = ptr->token;
     if(chdir(dir) == -1){ 
-        perror("Error changing directory");
+        perror("Error Changing Directory!");
+        return 1;
     }
+
+    return 0;
 }
 
-void pwd()
+int pwd(tokenList_t *command)
 {
     char cwd[255]; //Think of a size
     if(getcwd(cwd, sizeof(cwd)) == NULL) //Simply uses the getcwd command to get the current directory
     {
-        printf("Error getting directory");
+        printf("Error Getting Directory!\n");
+        return 1;
     }
     else
     {
         printf("%s\n", cwd);
     }
-    
-    
+
+    return 0;
+
 };
 /*Testing functions*/
-void echoSyn()
+int echoSyn()
 {
     tokenList_t *ptr = tokenList->next;
     while(ptr != NULL)
@@ -179,9 +215,11 @@ void echoSyn()
     }
     printf("\n");
 
+    return 0;
+
 }
 
-void echoCommand()
+int echoCommand()
 {
     tokenList_t *ptr = tokenList->next;
     while(ptr != NULL)
@@ -191,9 +229,11 @@ void echoCommand()
     }
     printf("\n");
 
+    return 0;
+
 }
 
-void echoNext()
+int echoNext()
 {
     tokenList_t *ptr = tokenList;
     while(ptr != NULL)
@@ -209,10 +249,12 @@ void echoNext()
         }
     }
     printf("\n");
+    
+    return 0;
 
 }
 
-void echoPrev()
+int echoPrev()
 {
     tokenList_t *ptr = tokenList;
     while(ptr != NULL)
@@ -229,106 +271,433 @@ void echoPrev()
     }
     printf("\n");
 
+    return 0;
+
 }
 
 
 
-char* specialArgs[] = {"<", ">", "|"};
-int executeTokens(){
-    tokenList_t *ptr = tokenList; //Pointer to the token list
+void wildcardHandler(){
+    tokenList_t *ptr = tokenList;
+
     while(ptr != NULL){
-        
-        tokenList_t *command = ptr->command; //Pointer to the command
-        
-        // Skip special args for now
-        if(command == NULL){
+        // new list to hold wildcard results
+        wildcardList_t *wildList = NULL;
+
+        // Check if wildcard is present in given string
+        if(strchr(ptr->token, '*') != NULL){
+            // Wildcard found
+            
+            // Using working directory
+            char *dir = ".";
+            DIR *d;
+            struct dirent *dirInfo;
+            d = opendir(dir);
+            
+            // Check if failed
+            if(d == NULL){
+                printf("Error opening directory");
+                return;
+            }
+
+            // Loop through directory
+            wildcardList_t *previousWild = NULL;
+
+            dirInfo = readdir(d);
+            
+            while(dirInfo != NULL){
+                // Check if file matches wildcard
+                // Allows for * and ?* wildcards
+                if (fnmatch(ptr->token, dirInfo->d_name, FNM_PERIOD) == 0) { // fnmatch(pattern, string, flags)
+                    // File matches wildcard
+                    //printf("Match Found!\n");
+
+                    // Create new wildcard list
+                    wildcardList_t *newWildList = malloc(sizeof(wildcardList_t));
+                    newWildList->next = NULL;
+
+                    // Copy name 
+                    newWildList->token = malloc((strlen(dirInfo->d_name) + 1) * sizeof(char));
+                    strcpy(newWildList->token, dirInfo->d_name);
+
+                    // Add to list
+                    if(wildList == NULL){
+                        wildList = newWildList;
+                    }else{
+                        previousWild->next = newWildList;
+                    }
+                    previousWild = newWildList;
+
+                }
+
+                // Get next file
+                dirInfo = readdir(d);
+            }
+
+            // Close directory
+            closedir(d);
+            
+        }
+
+        // Check if wildcard list is empty
+        if(wildList == NULL){
+            // No wildcards found
             ptr = ptr->next;
             continue;
         }
 
-        // See if command is in command list
-        int found = 0;
-        for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
-            if(strcmp(commandList[i].name, command->token) == 0){
-                commandList[i].func();
-                found = 1;
-                // DO THIS STUFF LATER!
-                break;
-            }
-        }
+        // Convert wildcard list to token list
+        wildcardList_t *wildPtr = wildList;
+        tokenList_t *wildTokens = NULL;
+        tokenList_t *previousWildToken = NULL;
 
-        if(!found){
+        while(wildPtr != NULL){
+            // Create new token
+            tokenList_t *newToken = malloc(sizeof(tokenList_t));
+            newToken->next = NULL;
+            newToken->prev = NULL;
+            newToken->command = NULL;
 
-            // Run command in child process
-            pid_t pid = fork();
-            
-            if(pid == 0){ // Child process
+            // Copy name 
+            newToken->token = malloc((strlen(wildPtr->token) + 1) * sizeof(char));
+            strcpy(newToken->token, wildPtr->token);
 
-                // Find path
-                char *cmdDir = findPath(command->token);
-                if(cmdDir == NULL){
-                    perror("Command not found");
-                    exit(EXIT_FAILURE);
-                }
-
-                // Make path
-                char *cmdPath = malloc(strlen(cmdDir) + strlen(command->token) + 2);
-                strcpy(cmdPath, cmdDir);
-                strcat(cmdPath, "/");
-                strcat(cmdPath, command->token);
-
-                // Make arg list
-                tokenList_t *tempptr = ptr;
-                int count = 0;
-                while(tempptr != NULL && tempptr->command == command){
-                    count++;
-                    tempptr = tempptr->next;
-                }
-
-                char *args[count+1];
-                for(int i = 0; i < count; i++){
-                    args[i] = ptr->token;
-                    ptr = ptr->next;
-                }
-                args[count] = NULL;
-
-                // Execute command                
-                int status = execv(cmdPath, args);                
-                free(cmdPath);
-
-                if(status == -1){
-                    perror("Error executing command");
-                    exit(EXIT_FAILURE);
-                }
-
-                exit(EXIT_SUCCESS);
-
-            }else if(pid > 0){ // Parent process
-                // Wait for child to finish
-                int status;
-                waitpid(pid, &status, 0);
-
-                if(WEXITSTATUS(status) == EXIT_FAILURE){
-                    errStatus = 1;
-                }
-                
+            // Add to list
+            if(wildTokens == NULL){
+                wildTokens = newToken;
             }else{
-                printf("Error forking process");
-                return EXIT_FAILURE;
+                previousWildToken->next = newToken;
+                newToken->prev = previousWildToken;
             }
+            previousWildToken = newToken;
 
+            // Get next wildcard
+            wildPtr = wildPtr->next;
         }
 
-        // Move to next command
-        while(ptr != NULL && ptr->command == command){
-            ptr = ptr->next;
+        // See if ptr is a command 
+        if(ptr->command == ptr){
+            // First wildcard is the command, every other wildcard points to first
+            wildTokens->command = wildTokens;
+            
+            tokenList_t *tokenWildPtr = wildTokens->next;
+            while(tokenWildPtr != NULL){
+                tokenWildPtr->command = wildTokens;
+                tokenWildPtr = tokenWildPtr->next;
+            }
+
+            // Also change all ptr->command to wildTokens->command if they are the same
+            tokenList_t *tokenPtr = ptr->next;
+            while(tokenPtr != NULL && tokenPtr->command == ptr){
+                tokenPtr->command = wildTokens;
+                tokenPtr = tokenPtr->next;
+            }
+            
+        }else{
+            // Put wild commands as ptr->command
+            tokenList_t *tokenWildPtr = wildTokens;
+            while(tokenWildPtr != NULL){
+                tokenWildPtr->command = ptr->command;
+                tokenWildPtr = tokenWildPtr->next;
+            }
+        }
+
+        // Set prev
+        wildTokens->prev = ptr->prev;
+        if(ptr->prev != NULL){
+            ptr->prev->next = wildTokens;
+        }
+
+        // Set next
+        tokenList_t *lastWildToken = wildTokens;
+        while(lastWildToken->next != NULL){
+            lastWildToken = lastWildToken->next;
+        }
+        lastWildToken->next = ptr->next;
+        if(ptr->next != NULL){
+            ptr->next->prev = lastWildToken;
+        }
+
+        // If ptr is the first token, change tokenList
+        if(ptr == tokenList){
+            tokenList = wildTokens;
+        }
+
+        // Free ptr
+        free(ptr->token);
+        free(ptr);
+
+        // Free wildcard list
+        wildcardList_t *wildFreePtr = wildList;
+        while(wildFreePtr != NULL){
+            wildcardList_t *temp = wildFreePtr;
+            wildFreePtr = wildFreePtr->next;
+            free(temp->token);
+            free(temp);
+        }
+
+        // Get next token
+        ptr = wildTokens->next;
+
+    }
+}
+
+int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, int in, int out){
+    
+    // Check if command is builtin
+    tokenList_t *command = tokenListStartPtr->command; //Pointer to the command
+
+    int found = 0;
+    for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
+        if(strcmp(commandList[i].name, command->token) == 0){
+            return commandList[i].func(tokenListStartPtr, tokenListEndPtr, in, out);
         }
     }
 
+    
+    // Check if command is in path
+    char *commandPath = findPathCommand(tokenListStartPtr->token);
+    if(commandPath == NULL){
+        // Command not found
+        printf("Command not found\n");
+        return 1;
+    }
+
+    // Add command to path
+    char *newPath = malloc(strlen(commandPath) + strlen(tokenListStartPtr->token) + 2);
+    strcpy(newPath, commandPath);
+    strcat(newPath, "/");
+    strcat(newPath, tokenListStartPtr->token);
+
+    // Create args AND handle redirects 
+    char **args = malloc(sizeof(char*));
+    args[0] = tokenListStartPtr->token;
+    int argCount = 1;
+    tokenList_t *argPtr = tokenListStartPtr->next;
+    int lastWasRedirect = 0;
+    char* lastRedirectIn = NULL;
+    char* lastRedirectOut = NULL;
+
+    while(argPtr != NULL && argPtr != tokenListEndPtr && tokenListStartPtr != tokenListEndPtr){
+
+        if (strcmp(argPtr->token, "<") == 0 || strcmp(argPtr->token, ">") == 0)
+        {
+
+            // Log redirect
+            if(strcmp(argPtr->token, "<") == 0){
+                lastRedirectIn = argPtr->next->token;
+            }else{
+                lastRedirectOut = argPtr->next->token;
+            }
+
+            // Skip
+            argPtr = argPtr->next;
+            lastWasRedirect = 1;
+
+            // Skip again
+            if (argPtr != tokenListEndPtr)
+            {
+                argPtr = argPtr->next;
+                printf("Skipping %s", argPtr->token);
+                lastWasRedirect = 0;
+            }
+        }else{
+            // Add to args
+            args = realloc(args, (argCount + 1) * sizeof(char*));
+            args[argCount] = argPtr->token;
+            argCount++;
+
+            // Get next arg
+            argPtr = argPtr->next;
+        }
+    }
+
+    // Do for tokenlistend
+    if(tokenListEndPtr != tokenListStartPtr){
+        if (strcmp(tokenListEndPtr->token, "<") == 0 || strcmp(tokenListEndPtr->token, ">") == 0)
+        {
+            // Not valid
+            printf("No File Redirect!\n");
+            return 1;
+
+        }else{
+            // Add to args unless prev is < or >
+            if (lastWasRedirect == 0)
+            {
+                args = realloc(args, (argCount + 1) * sizeof(char*));
+                args[argCount] = tokenListEndPtr->token;
+                argCount++;
+            }
+        }
+    }
+
+    // Add null to end of args
+    args = realloc(args, (argCount + 1) * sizeof(char*));
+    args[argCount] = NULL;
+
+    // Handle redirects
+    if(lastRedirectIn != NULL){
+        // Open file
+        in = open(lastRedirectIn, O_RDONLY);
+        if(in < 0){
+            printf("Error opening file");
+            return 1;
+        }
+    }
+
+    if(lastRedirectOut != NULL){
+        // Open file
+        out = open(lastRedirectOut, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if(out < 0){
+            printf("Error opening file");
+            return 1;
+        }
+    }
+
+    // Now we can actually execute which sounds fun
+    // Fork
+    pid_t pid = fork();
+    if(pid == 0){
+        // Child
+        // Execute
+        dup2(in, 0);
+        dup2(out, 1);
+
+        execv(newPath, args);
+        printf("Error executing command");
+        return 1;
+    }else if(pid < 0){
+        // Error
+        printf("Error forking");
+        return 1;
+    }else{
+        // Parent
+        // Wait for child
+        int status;
+        waitpid(pid, &status, 0);
+
+        if(status != 0){
+            printf("Error executing command");
+            return 1;
+        }
+
+        if (lastRedirectIn != NULL)
+        {
+            close(in);
+        }
+
+        if (lastRedirectOut != NULL)
+        {
+            close(out);
+        }
+
+    }
+
+    // Free 
+    free(args);
+    free(newPath);
+
     return 0;
+    
 }
 
-char* findPath(char* commandName){
+int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, int in, int out){
+    
+    // Just print out tokens for now
+    tokenList_t *ptr = tokenListStartPtr;
+    // printf("Tokens: ");
+    // while(ptr != NULL){
+    //     printf("[%s] ", ptr->token);
+    //     ptr = ptr->next;
+    // }   
+    // puts("");
+
+    // Go through tokens for pipes
+    ptr = tokenListEndPtr;
+    tokenList_t *pipePtr = NULL;
+    while (ptr != NULL)
+    {
+        // Check if pipe
+        if(strcmp(ptr->token, "|") == 0){
+            // Pipe found
+            pipePtr = ptr;
+            break;
+        }
+
+        // Get next token
+        ptr = ptr->prev;
+    }
+
+    // Check if pipe found
+    if(pipePtr == NULL){ // kinda the base case
+        // No pipe found, execute normally
+        int status = executeCommand(tokenListStartPtr, tokenListEndPtr, in, out);
+        return status;
+    }else{
+        // Pipe found, execute with pipe
+
+        // Create pipe
+        int pipefd[2];
+        if(pipe(pipefd) == -1){
+            printf("Error creating pipe");
+            return 1;
+        }
+
+        // Fork
+        pid_t pid = fork();
+        if (pid == -1) {
+            printf("Error forking");
+            return 1;
+        } else if (pid == 0) {
+            // Child
+            dup2(pipefd[1], STDOUT_FILENO);
+            close(pipefd[0]);
+            executeTokens(tokenListStartPtr, pipePtr->prev,in, pipefd[1]);
+            close(pipefd[1]);
+            exit(0);
+        }else{
+            // Parent
+            close(pipefd[1]);
+
+            pid_t newPid = fork();
+            if (newPid == -1) {
+                printf("Error forking");
+                return 1;
+            } else if (newPid == 0) {
+                // Child
+                dup2(pipefd[0], STDIN_FILENO);
+                executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
+                close(pipefd[0]);
+                exit(0);
+            }else{
+                // Parent
+                close(pipefd[0]);
+                waitpid(pid, NULL, 0);
+                waitpid(newPid, NULL, 0);
+
+                // Close files
+                if (in != STDIN_FILENO)
+                {
+                    close(in);
+                }
+
+                if (out != STDOUT_FILENO)
+                {
+                    close(out);
+                }
+
+            }
+
+            return 0;
+        }        
+        
+    }
+
+    return 0;
+    
+}
+
+char* findPathCommand(char* commandName){
 
     // Go through path options, use stat, find if file is exe
     for(int i = 0; i < sizeof(pathOptions)/sizeof(pathOptions[0]); i++){
@@ -459,7 +828,7 @@ void tokenizer(int argc, char **argv)
            // printf("char: %d\n",buff[0]);
             //printf("Escape Traker == %d\n", escapeTracker);
            //If the \ is seen, the next character should be added no matter what
-            if(((buff[0] != ' ' && buff[0] != '|' && buff[0] != '>' && buff[0] != '<' && buff[0] != '\n' && buff[0] != '*' && buff[0] != '\n') || quoteTracker == 1) || (escapeTracker == 1 && buff[0] != '\n')) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
+            if(((buff[0] != ' ' && buff[0] != '|' && buff[0] != '>' && buff[0] != '<' && buff[0] != '\n' && buff[0] != '\n') || quoteTracker == 1) || (escapeTracker == 1 && buff[0] != '\n')) //Only add valid, nonspecial chars; technically reading past entered bytes, so don't add the last one
             {
                 
                 if((char)buff[0] == '"' && quoteTracker == 0 && escapeTracker == 0) //First occurence of a quote
@@ -500,7 +869,7 @@ void tokenizer(int argc, char **argv)
             //If in the middle of a token, push current token, then push special character
             //If just special character add it
             //Both set is command to 1 to look for a new command
-            else if(buff[0] == '|' || buff[0] == '>' || buff[0] == '<' || buff[0] == '*') 
+            else if(buff[0] == '|' || buff[0] == '>' || buff[0] == '<') 
             {
                 isCommand = 1; //Next token should be a command
                 if(holder[0] == -1) //Looking for a special character as the first and only argument
