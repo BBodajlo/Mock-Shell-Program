@@ -157,7 +157,7 @@ void initialize()
 int shellExit(tokenList_t *command)
 {
     exitStatus = 1;
-    return 0;
+    return 0; 
 };
 
 void echo()
@@ -444,31 +444,7 @@ void wildcardHandler(){
 
 int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, int in, int out){
     
-    // Check if command is builtin
-    tokenList_t *command = tokenListStartPtr->command; //Pointer to the command
-
-    int found = 0;
-    for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
-        if(strcmp(commandList[i].name, command->token) == 0){
-            return commandList[i].func(tokenListStartPtr, tokenListEndPtr, in, out);
-        }
-    }
-
-    
-    // Check if command is in path
-    char *commandPath = findPathCommand(tokenListStartPtr->token);
-    if(commandPath == NULL){
-        // Command not found
-        printf("Command not found\n");
-        return 1;
-    }
-
-    // Add command to path
-    char *newPath = malloc(strlen(commandPath) + strlen(tokenListStartPtr->token) + 2);
-    strcpy(newPath, commandPath);
-    strcat(newPath, "/");
-    strcat(newPath, tokenListStartPtr->token);
-
+    // Redirects
     // Create args AND handle redirects 
     char **args = malloc(sizeof(char*));
     args[0] = tokenListStartPtr->token;
@@ -498,7 +474,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
             if (argPtr != tokenListEndPtr)
             {
                 argPtr = argPtr->next;
-                printf("Skipping %s", argPtr->token);
+                //printf("Skipping %s", argPtr->token);
                 lastWasRedirect = 0;
             }
         }else{
@@ -553,6 +529,36 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
             return 1;
         }
     }
+
+    // Check if command was exit
+    if(strcmp(tokenListStartPtr->token, "exit") == 0){
+        return 0; // already handled
+    }
+
+    // Check if command is builtin
+    tokenList_t *command = tokenListStartPtr->command; //Pointer to the command
+
+    int found = 0;
+    for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
+        if(strcmp(commandList[i].name, command->token) == 0){
+            return commandList[i].func(tokenListStartPtr, tokenListEndPtr, in, out);
+        }
+    }
+
+    
+    // Check if command is in path
+    char *commandPath = findPathCommand(tokenListStartPtr->token);
+    if(commandPath == NULL){
+        // Command not found
+        printf("Command not found\n");
+        return 1;
+    }
+
+    // Add command to path
+    char *newPath = malloc(strlen(commandPath) + strlen(tokenListStartPtr->token) + 2);
+    strcpy(newPath, commandPath);
+    strcat(newPath, "/");
+    strcat(newPath, tokenListStartPtr->token);
 
     // Now we can actually execute which sounds fun
     // Fork
@@ -611,6 +617,19 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
     //     ptr = ptr->next;
     // }   
     // puts("");
+
+    // Go through tokens to see if exit is called
+    ptr = tokenListStartPtr;
+    while(ptr != NULL){
+        if(strcmp(ptr->token, "exit") == 0){
+            // Exit called
+            shellExit(NULL);
+            break;
+        }
+
+        // We dont need to remove, it will just be a dead pipe (returning 0 in the command execution)
+
+    }
 
     // Go through tokens for pipes
     ptr = tokenListEndPtr;
