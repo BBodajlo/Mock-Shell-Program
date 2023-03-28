@@ -521,7 +521,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         // Open file
         in = open(lastRedirectIn, O_RDONLY);
         if(in < 0){
-            printf("Error opening file");
+            printf("Error opening file\n");
             return 1;
         }
     }
@@ -530,7 +530,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         // Open file
         out = open(lastRedirectOut, O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if(out < 0){
-            printf("Error opening file");
+            printf("Error opening file\n");
             return 1;
         }
     }
@@ -705,14 +705,14 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
         // Create pipe
         int pipefd[2];
         if(pipe(pipefd) == -1){
-            printf("Error creating pipe");
+            printf("Error creating pipe\n");
             return 1;
         }
 
         // Fork
         pid_t pid = fork();
         if (pid == -1) {
-            printf("Error forking");
+            printf("Error forking\n");
             return 1;
         } else if (pid == 0) {
             // Child
@@ -727,7 +727,7 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
 
             pid_t newPid = fork();
             if (newPid == -1) {
-                printf("Error forking");
+                printf("Error forking\n");
                 return 1;
             } else if (newPid == 0) {
                 // Child
@@ -781,7 +781,7 @@ char* findPathCommand(char* commandName){
 
         // Check if malloc failed
         if(newPath == NULL){
-            printf("Error allocating memory for path");
+            printf("Error allocating memory for path\n");
             return NULL;
         }
 
