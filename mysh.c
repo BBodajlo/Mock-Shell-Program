@@ -616,10 +616,19 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         dup2(out, 1);
 
         execv(newPath, args);
+
+        // Free
+        free(args);
+        free(newPath);
+
         printf("Error executing command\n");
         return 1;
     }else if(pid < 0){
         // Error
+        // Free
+        free(args);
+        free(newPath);
+
         printf("Error forking\n");
         return 1;
     }else{
@@ -867,10 +876,6 @@ void tokenizer(int argc, char **argv)
     int escapeTracker = 0;
     previousToken = NULL; // Resetting previous token for new stream
     
-    
-
-    
-    
     if(argc < 2) //Checking to see if the program was given arguments meaning batch mode was employed
     {
         input = STDIN_FILENO; //If no arguments, standard input is the input
@@ -886,6 +891,7 @@ void tokenizer(int argc, char **argv)
         else{
             printf("Could not open file %s\n", argv[1]); //Place holder error message to not opening file
             free(tokenList); //Free the token list for no seg fault
+            free(holder); //Free the holder string for no seg fault
             exit(EXIT_FAILURE);
         }
     }
@@ -1020,6 +1026,9 @@ void tokenizer(int argc, char **argv)
             }
         }
     }
+
+    free(holder); //Freeing the holder buffer
+
 };
 
 
@@ -1100,8 +1109,3 @@ void freeTokenList() //Need to free the strings allocated inside of each tokenLi
     }
 
 }
-
-
-
-
-
