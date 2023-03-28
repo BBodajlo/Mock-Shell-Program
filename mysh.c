@@ -14,6 +14,7 @@
 #define MAX_TOKENS 20 //Max amount of tokens on a single line to parse
 #define READ_BUFFER 1
 #define TOKEN_INIT 8
+#define PWD_INIT 128
 
 static int isInitialized = 0; //Static variable to keep track of if the shell has been initialized
 
@@ -193,7 +194,11 @@ int cd(tokenList_t *command, int in, int out){
 
 int pwd(tokenList_t *command, int in, int out)
 {
-    char cwd[255]; //Think of a size
+    //char cwd[255]; //Think of a size
+    int cwdSize = PWD_INIT;
+    char cwd = malloc(sizeof(char)*PWD_INIT)
+
+
     if(getcwd(cwd, sizeof(cwd)) == NULL) //Simply uses the getcwd command to get the current directory
     {
         printf("Error Getting Directory!\n");
@@ -201,10 +206,15 @@ int pwd(tokenList_t *command, int in, int out)
     }
     else
     {
+        while(getcwd(cwd, cwdSize) == ENOMEM)
+        {
+            cwdSize = cwdSize*2;
+            cwd = realloc(cwd, sizeof(char)*cwdSize);
+        }
         write(out, cwd, strlen(cwd));
         write(out, "\n", 1);
     }
-
+    free(cwd);
     return 0;
 
 };
@@ -576,12 +586,19 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
 
     // Check if command is in path (contains /)
     char* commandPath = NULL;
-    char pathInDir[255];
+    //char pathInDir[255];
+    int dirSize = NULL;
+    char pathInDir = malloc(sizeof(char)*PWD_INIT);
     
     if(strchr(tokenListStartPtr->token, '/') != NULL){
         // Get current path 
+        dirSize = PWD_INIT;
         if (getcwd(pathInDir, sizeof(pathInDir)) != NULL){
-
+            while(getcwd(pathInDir, dirSize) == ENOMEM)
+            {
+                dirSize = dirSize*2;
+                pathInDir = realloc(pathInDir, dirSize);
+            }
             // Set to commandPath
             commandPath = pathInDir;
         }
@@ -605,6 +622,8 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     strcpy(newPath, commandPath);
     strcat(newPath, "/");
     strcat(newPath, tokenListStartPtr->token);
+
+    free(pathInDir);
 
     // Now we can actually execute which sounds fun
     // Fork
