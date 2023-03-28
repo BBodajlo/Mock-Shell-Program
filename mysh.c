@@ -574,8 +574,25 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         }
     }
 
-    // Check if command is in path
-    char *commandPath = findPathCommand(tokenListStartPtr->token);
+    // Check if command is in path (contains /)
+    char* commandPath = NULL;
+    if(strchr(tokenListStartPtr->token, '/') != NULL){
+        // Get current path 
+        char cwd[255];
+        if (getcwd(cwd, sizeof(cwd)) != NULL){
+            // put into commandPath
+            commandPath = malloc(strlen(cwd) + 1);
+            strcpy(commandPath, cwd);   
+        }
+    }
+
+
+    // Check if command is in pre-listed paths
+    if(commandPath == NULL){
+        commandPath = findPathCommand(tokenListStartPtr->token);
+    }
+
+    // No command was found, so return
     if(commandPath == NULL){
         // Command not found
         printf("Command not found\n");
