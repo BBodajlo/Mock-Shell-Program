@@ -46,13 +46,14 @@ tokenList_t *previousToken = NULL;
 // Functions 
 void initialize();
 int shellExit(tokenList_t *command);
-int pwd(tokenList_t *command);
-int cd(tokenList_t *command);
+int pwd(tokenList_t *command, int in, int out);
+int cd(tokenList_t *command, int in, int out);
 
 void tokenizer(int argc, char **argv);
 void addToken(char *token, tokenList_t *command);
 void freeTokenList();
 void alterAndSetCommand(tokenList_t **c);
+void checkExit();
 int executeTokens(tokenList_t *start, tokenList_t *end, int in, int out);
 void wildcardHandler();
 char* findPathCommand(char *command);
@@ -73,7 +74,6 @@ struct command
 
 // Command list
 struct command commandList[] = {
-    {"exit", shellExit},
     {"pwd", pwd},
     {"cd", cd},
 
@@ -129,6 +129,9 @@ int main (int argc, char** argv)
             ptr = ptr->next;
         }
         
+        // Check if exit was called
+        checkExit();
+
         // Execute
         int cmdStatus = executeTokens(tokenList, ptr, STDIN_FILENO, STDOUT_FILENO);
         if (cmdStatus == 1)
@@ -171,7 +174,7 @@ void echo()
 
 };
 
-int cd(tokenList_t *command){
+int cd(tokenList_t *command, int in, int out){
     
     tokenList_t *ptr = command->next;
     if(ptr == NULL){
@@ -188,7 +191,7 @@ int cd(tokenList_t *command){
     return 0;
 }
 
-int pwd(tokenList_t *command)
+int pwd(tokenList_t *command, int in, int out)
 {
     char cwd[255]; //Think of a size
     if(getcwd(cwd, sizeof(cwd)) == NULL) //Simply uses the getcwd command to get the current directory
@@ -198,7 +201,7 @@ int pwd(tokenList_t *command)
     }
     else
     {
-        printf("%s\n", cwd);
+        write(out, cwd, strlen(cwd));
     }
 
     return 0;
@@ -456,6 +459,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
 
     while(argPtr != NULL && argPtr != tokenListEndPtr && tokenListStartPtr != tokenListEndPtr){
 
+        // Check if redirect
         if (strcmp(argPtr->token, "<") == 0 || strcmp(argPtr->token, ">") == 0)
         {
 
@@ -532,6 +536,18 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
 
     // Check if command was exit
     if(strcmp(tokenListStartPtr->token, "exit") == 0){
+
+        // Free args
+        free(args);
+
+        // Close files
+        if(in != 0){
+            close(in);
+        }
+        if(out != 1){
+            close(out);
+        }
+
         return 0; // already handled
     }
 
@@ -541,11 +557,23 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     int found = 0;
     for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
         if(strcmp(commandList[i].name, command->token) == 0){
-            return commandList[i].func(tokenListStartPtr, tokenListEndPtr, in, out);
+            int success = commandList[i].func(tokenListStartPtr, in, out);
+
+            // Free args
+            free(args);
+
+            // Close files
+            if(in != 0){
+                close(in);
+            }
+            if(out != 1){
+                close(out);
+            }
+
+            return success;
         }
     }
 
-    
     // Check if command is in path
     char *commandPath = findPathCommand(tokenListStartPtr->token);
     if(commandPath == NULL){
@@ -607,6 +635,21 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     
 }
 
+void checkExit(){
+    tokenList_t* ptr = tokenList;
+    while(ptr != NULL){
+        if(strcmp(ptr->token, "exit") == 0){
+            // Exit called
+            shellExit(NULL);
+            break;
+        }
+
+        ptr = ptr->next;
+        // We dont need to remove, it will just be a dead pipe (returning 0 in the command execution)
+
+    }
+}
+
 int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, int in, int out){
     
     // Just print out tokens for now
@@ -617,19 +660,6 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
     //     ptr = ptr->next;
     // }   
     // puts("");
-
-    // Go through tokens to see if exit is called
-    ptr = tokenListStartPtr;
-    while(ptr != NULL){
-        if(strcmp(ptr->token, "exit") == 0){
-            // Exit called
-            shellExit(NULL);
-            break;
-        }
-
-        // We dont need to remove, it will just be a dead pipe (returning 0 in the command execution)
-
-    }
 
     // Go through tokens for pipes
     ptr = tokenListEndPtr;
