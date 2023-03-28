@@ -202,6 +202,7 @@ int pwd(tokenList_t *command, int in, int out)
     else
     {
         write(out, cwd, strlen(cwd));
+        write(out, "\n", 1);
     }
 
     return 0;
@@ -554,7 +555,6 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     // Check if command is builtin
     tokenList_t *command = tokenListStartPtr->command; //Pointer to the command
 
-    int found = 0;
     for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
         if(strcmp(commandList[i].name, command->token) == 0){
             int success = commandList[i].func(tokenListStartPtr, in, out);
