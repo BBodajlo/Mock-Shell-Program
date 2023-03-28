@@ -8,6 +8,7 @@
 #include <sys/dir.h>
 #include <dirent.h>
 #include <fnmatch.h>
+#include <errno.h>
 
 
 #define MAX_INPUT 128 //Max size of input
@@ -196,25 +197,37 @@ int pwd(tokenList_t *command, int in, int out)
 {
     //char cwd[255]; //Think of a size
     int cwdSize = PWD_INIT;
-    char cwd = malloc(sizeof(char)*PWD_INIT)
+    char* cwd = malloc(sizeof(char)*PWD_INIT);
 
-
-    if(getcwd(cwd, sizeof(cwd)) == NULL) //Simply uses the getcwd command to get the current directory
+    // Get current working directory, realloc if needed
+    while(getcwd(cwd, cwdSize) == NULL)
     {
-        printf("Error Getting Directory!\n");
-        return 1;
-    }
-    else
-    {
-        while(getcwd(cwd, cwdSize) == ENOMEM)
-        {
-            cwdSize = cwdSize*2;
-            cwd = realloc(cwd, sizeof(char)*cwdSize);
+        if (errno == ENOMEM){
+            perror("Error getting current working directory");
+            free(cwd);
+            return 1;
         }
-        write(out, cwd, strlen(cwd));
-        write(out, "\n", 1);
+
+        if (errno == ERANGE){
+            // Buffer too small, realloc and try again
+            cwdSize *= 2;
+            cwd = realloc(cwd, sizeof(char)*cwdSize);
+
+            if(cwd == NULL){
+                perror("Error reallocating memory for current working directory");
+                free(cwd);
+                return 1;
+            }
+        }
+        
     }
+
+    // write to stdout
+    write(out, cwd, strlen(cwd));
+    write(out, "\n", 1);
+
     free(cwd);
+    
     return 0;
 
 };
@@ -587,21 +600,35 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     // Check if command is in path (contains /)
     char* commandPath = NULL;
     //char pathInDir[255];
-    int dirSize = NULL;
-    char pathInDir = malloc(sizeof(char)*PWD_INIT);
+    int dirSize = -1;
+    char* pathInDir = malloc(sizeof(char)*PWD_INIT);
     
     if(strchr(tokenListStartPtr->token, '/') != NULL){
         // Get current path 
         dirSize = PWD_INIT;
-        if (getcwd(pathInDir, sizeof(pathInDir)) != NULL){
-            while(getcwd(pathInDir, dirSize) == ENOMEM)
-            {
-                dirSize = dirSize*2;
-                pathInDir = realloc(pathInDir, dirSize);
+        while(getcwd(pathInDir, dirSize) == NULL)
+        {
+            // Safety check
+            if (errno == ENOMEM){
+                perror("Error getting current working directory");
+                free(pathInDir);
+                return 1;
             }
-            // Set to commandPath
-            commandPath = pathInDir;
+
+            // If too small buffer, realloc and try again
+            if (errno == ERANGE){
+                dirSize *= 2;
+                pathInDir = realloc(pathInDir, sizeof(char)*dirSize);
+
+                if(pathInDir == NULL){
+                    perror("Error reallocating memory for current working directory");
+                    free(pathInDir);
+                    return 1;
+                }
+            }
         }
+
+        commandPath = pathInDir;
     }
 
 
