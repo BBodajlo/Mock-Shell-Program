@@ -576,13 +576,14 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
 
     // Check if command is in path (contains /)
     char* commandPath = NULL;
+    char pathInDir[255];
+    
     if(strchr(tokenListStartPtr->token, '/') != NULL){
         // Get current path 
-        char cwd[255];
-        if (getcwd(cwd, sizeof(cwd)) != NULL){
-            // put into commandPath
-            commandPath = malloc(strlen(cwd) + 1);
-            strcpy(commandPath, cwd);   
+        if (getcwd(pathInDir, sizeof(pathInDir)) != NULL){
+
+            // Set to commandPath
+            commandPath = pathInDir;
         }
     }
 
