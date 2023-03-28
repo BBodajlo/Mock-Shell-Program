@@ -598,11 +598,11 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         dup2(out, 1);
 
         execv(newPath, args);
-        printf("Error executing command");
+        printf("Error executing command\n");
         return 1;
     }else if(pid < 0){
         // Error
-        printf("Error forking");
+        printf("Error forking\n");
         return 1;
     }else{
         // Parent
@@ -611,7 +611,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         waitpid(pid, &status, 0);
 
         if(status != 0){
-            printf("Error executing command");
+            printf("Error executing command\n");
             return 1;
         }
 
@@ -701,9 +701,9 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // Child
             dup2(pipefd[1], STDOUT_FILENO);
             close(pipefd[0]);
-            executeTokens(tokenListStartPtr, pipePtr->prev,in, pipefd[1]);
+            int status = executeTokens(tokenListStartPtr, pipePtr->prev,in, pipefd[1]);
             close(pipefd[1]);
-            exit(0);
+            exit(status);
         }else{
             // Parent
             close(pipefd[1]);
@@ -715,14 +715,15 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             } else if (newPid == 0) {
                 // Child
                 dup2(pipefd[0], STDIN_FILENO);
-                executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
+                int status = executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
                 close(pipefd[0]);
-                exit(0);
+                exit(status);
             }else{
                 // Parent
                 close(pipefd[0]);
-                waitpid(pid, NULL, 0);
-                waitpid(newPid, NULL, 0);
+                int status1, status2;
+                waitpid(pid, &status1, 0);
+                waitpid(newPid, &status2, 0);
 
                 // Close files
                 if (in != STDIN_FILENO)
@@ -733,6 +734,12 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
                 if (out != STDOUT_FILENO)
                 {
                     close(out);
+                }
+
+                // one of them errored
+                if (status1 != 0 || status2 != 0)
+                {
+                    return 1;
                 }
 
             }
@@ -1075,7 +1082,6 @@ void freeTokenList() //Need to free the strings allocated inside of each tokenLi
     }
 
 }
-
 
 
 
