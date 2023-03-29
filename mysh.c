@@ -784,7 +784,25 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // CD is realistically the only problem if we fork here
             if(strcmp(pipePtr->next->token, "cd") == 0){
                 // Change directory
-                return cd(pipePtr->next, -1, -1); // -1 is just a placeholder
+                int status1;
+                waitpid(pid, &status1, 0);
+                
+                int status2 = cd(pipePtr->next, pipefd[0], -1); // -1 is just a placeholder
+                close(pipefd[0]);
+
+                if(in != STDIN_FILENO){
+                    close(in);
+                }
+
+                if(out != STDOUT_FILENO){
+                    close(out);
+                }
+
+                if(status1 != 0 || status2 != 0){
+                    return 1;
+                }
+
+                return 0;
             }
 
             pid_t newPid = fork();
