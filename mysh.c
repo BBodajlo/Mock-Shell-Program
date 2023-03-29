@@ -334,6 +334,8 @@ int executeTestCommands()
         }
     }
     free(command);
+
+    return 0;
 }
 
 void wildcardHandler(){
@@ -554,6 +556,10 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         {
             // Not valid
             perror("No File Redirected");
+
+            // Free args
+            free(args);
+
             return 1;
 
         }else{
@@ -577,6 +583,10 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         in = open(lastRedirectIn, O_RDONLY);
         if(in < 0){
             perror("Error opening file");
+
+            // Free args
+            free(args);
+
             return 1;
         }
     }
@@ -586,6 +596,10 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         out = open(lastRedirectOut, O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if(out < 0){
             perror("Error opening file");
+
+            // Free args
+            free(args);
+
             return 1;
         }
     }
@@ -644,6 +658,8 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
             if (errno == ENOMEM){
                 perror("Error getting current working directory");
                 free(pathInDir);
+                free(args);
+
                 return 1;
             }
 
@@ -655,6 +671,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
                 if(pathInDir == NULL){
                     perror("Error reallocating memory for current working directory");
                     free(pathInDir);
+                    free(args);
                     return 1;
                 }
             }
@@ -673,6 +690,9 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     if(commandPath == NULL){
         // Command not found
         perror("Command not found");
+        free(args);
+        free(pathInDir);
+
         return 1;
     }
 
@@ -716,7 +736,10 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         waitpid(pid, &status, 0);
 
         if(status != 0){
-            perror(newPath);
+            perror("Error executing command");
+            free(args);
+            free(newPath);
+            
             return 1;
         }
 
@@ -813,11 +836,11 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // Parent
             close(pipefd[1]);
 
-            int status = executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
-            close(pipefd[0]);
-
             int childStatus;
             waitpid(pid, &childStatus, 0);
+
+            int status = executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
+            close(pipefd[0]);
 
             if(status != 0){
                 return status;
