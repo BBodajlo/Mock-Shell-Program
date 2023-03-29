@@ -5,13 +5,14 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/dir.h>
 #include <dirent.h>
 #include <fnmatch.h>
 #include <errno.h>
 
 
-#define MAX_INPUT 128 //Max size of input
+#define OUR_MAX_INPUT 128 //Max size of input
 #define MAX_TOKENS 20 //Max amount of tokens on a single line to parse
 #define READ_BUFFER 1
 #define TOKEN_INIT 8
@@ -37,7 +38,7 @@ typedef struct wildcardList{
 
 // Variables Main Needs 
 int exitStatus = 0;
-char programPath[MAX_INPUT] = "mysh"; 
+char programPath[OUR_MAX_INPUT] = "mysh"; 
 tokenList_t *tokenList; //General token list
 int batchMode = 0; //To stop the execution loop
 int batch = 0; //For tokenizer to know that batch mode is being used and to keep reading the file
@@ -96,9 +97,7 @@ int main (int argc, char** argv)
     {
         initialize(); //This will need to move once we get the batch mode working
     }
-    
-    char buff[MAX_INPUT]; //Simple start buffer for user input
-   
+       
     while(exitStatus == 0 && batchMode == 0) // Will probably just be set to while(1) later after logic is implemented
     {
         if(errStatus && argc < 2){
