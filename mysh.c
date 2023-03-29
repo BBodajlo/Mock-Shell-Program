@@ -65,7 +65,8 @@ int echoSyn();
 int echoCommand();
 int echoNext();
 int echoPrev();
-
+int executeTestCommands();
+int testFile = 0;
 // Command struct
 struct command
 {
@@ -100,7 +101,7 @@ int main (int argc, char** argv)
    
     while(exitStatus == 0 && batchMode == 0) // Will probably just be set to while(1) later after logic is implemented
     {
-
+        printf("error statud %d", errStatus);
         if(errStatus && argc < 2){
             printf("!%s> ", programPath); // Errored last time, so give the error prompt
             errStatus = 0;
@@ -133,14 +134,35 @@ int main (int argc, char** argv)
         
         // Check if exit was called
         checkExit();
-
         // Execute
-        int cmdStatus = executeTokens(tokenList, ptr, STDIN_FILENO, STDOUT_FILENO);
-        if (cmdStatus == 1)
-        {
-            errStatus = 1;
-        }
+        
 
+        //Checking if test file is being run
+        if(argc > 1)
+        {
+            if(strcmp(argv[1], "SyntaxTest.txt") == 0) //It is the test file
+            {
+                testFile = 1;
+            }
+            else{
+                testFile = 0;
+            }
+            
+        }
+        
+        
+        if(testFile == 0)
+        {
+            int cmdStatus = executeTokens(tokenList, ptr, STDIN_FILENO, STDOUT_FILENO);
+            if (cmdStatus == 1)
+            {
+                errStatus = 1;
+            }
+        }
+        //If test file is found for Syntax, only run functions to show syntax of tokens, processes and redirection will not work for that file
+        else{
+            executeTestCommands();
+        }
         // Free token list
         freeTokenList(); 
     }
@@ -173,6 +195,7 @@ void echo()
         printf("%s\n",ptr->token);
         ptr = ptr->next;
     }
+    free(ptr);
 
 };
 
@@ -225,7 +248,6 @@ int pwd(tokenList_t *command, int in, int out)
     // write to stdout
     write(out, cwd, strlen(cwd));
     write(out, "\n", 1);
-
     free(cwd);
     
     return 0;
@@ -241,7 +263,7 @@ int echoSyn()
         ptr = ptr->next;
     }
     printf("\n");
-
+    free(ptr);
     return 0;
 
 }
@@ -255,7 +277,7 @@ int echoCommand()
         ptr = ptr->next;
     }
     printf("\n");
-
+    free(ptr);
     return 0;
 
 }
@@ -276,7 +298,7 @@ int echoNext()
         }
     }
     printf("\n");
-    
+    free(ptr);
     return 0;
 
 }
@@ -297,12 +319,23 @@ int echoPrev()
         }
     }
     printf("\n");
-
+    free(ptr);
     return 0;
 
 }
 
+int executeTestCommands()
+{
+    tokenList_t *command = tokenList->command; //Pointer to the command
 
+    for(int i = 0; i < sizeof(commandList)/sizeof(commandList[0]); i++){
+        if(strcmp(commandList[i].name, command->token) == 0){
+            int success = commandList[i].func(command);
+            return success;
+        }
+    }
+    free(command);
+}
 
 void wildcardHandler(){
     tokenList_t *ptr = tokenList;
