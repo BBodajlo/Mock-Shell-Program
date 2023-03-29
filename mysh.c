@@ -101,7 +101,6 @@ int main (int argc, char** argv)
    
     while(exitStatus == 0 && batchMode == 0) // Will probably just be set to while(1) later after logic is implemented
     {
-        printf("error statud %d", errStatus);
         if(errStatus && argc < 2){
             printf("!%s> ", programPath); // Errored last time, so give the error prompt
             errStatus = 0;
