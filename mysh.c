@@ -781,40 +781,18 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // Parent
             close(pipefd[1]);
 
-            pid_t newPid = fork();
-            if (newPid == -1) {
-                perror("Error forking");
-                return 1;
-            } else if (newPid == 0) {
-                // Child
-                dup2(pipefd[0], STDIN_FILENO);
-                int status = executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
-                close(pipefd[0]);
-                exit(status);
-            }else{
-                // Parent
-                close(pipefd[0]);
-                int status1, status2;
-                waitpid(pid, &status1, 0);
-                waitpid(newPid, &status2, 0);
+            int status = executeCommand(pipePtr->next, tokenListEndPtr, pipefd[0], out);
+            close(pipefd[0]);
 
-                // Close files
-                if (in != STDIN_FILENO)
-                {
-                    close(in);
-                }
+            int childStatus;
+            waitpid(pid, &childStatus, 0);
 
-                if (out != STDOUT_FILENO)
-                {
-                    close(out);
-                }
+            if(status != 0){
+                return status;
+            }
 
-                // one of them errored
-                if (status1 != 0 || status2 != 0)
-                {
-                    return 1;
-                }
-
+            if(childStatus != 0){
+                return childStatus;
             }
 
             return 0;
