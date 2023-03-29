@@ -203,13 +203,13 @@ int cd(tokenList_t *command, int in, int out){
     
     tokenList_t *ptr = command->next;
     if(ptr == NULL){
-        printf("No Directory Specified!\n");
+        perror("No Directory Specified");
         return 1;
     }
 
     char *dir = ptr->token;
     if(chdir(dir) == -1){ 
-        perror("Error Changing Directory!");
+        perror("Error Changing Directory");
         return 1;
     }
 
@@ -356,7 +356,7 @@ void wildcardHandler(){
             
             // Check if failed
             if(d == NULL){
-                printf("Error opening directory");
+                perror("Error opening directory");
                 return;
             }
 
@@ -554,7 +554,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         if (strcmp(tokenListEndPtr->token, "<") == 0 || strcmp(tokenListEndPtr->token, ">") == 0)
         {
             // Not valid
-            printf("No File Redirect!\n");
+            perror("No File Redirected");
             return 1;
 
         }else{
@@ -577,7 +577,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         // Open file
         in = open(lastRedirectIn, O_RDONLY);
         if(in < 0){
-            printf("Error opening file\n");
+            perror("Error opening file");
             return 1;
         }
     }
@@ -586,7 +586,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         // Open file
         out = open(lastRedirectOut, O_WRONLY | O_CREAT | O_TRUNC, 0666);
         if(out < 0){
-            printf("Error opening file\n");
+            perror("Error opening file");
             return 1;
         }
     }
@@ -673,7 +673,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
     // No command was found, so return
     if(commandPath == NULL){
         // Command not found
-        printf("Command not found\n");
+        perror("Command not found");
         return 1;
     }
 
@@ -700,7 +700,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         free(args);
         free(newPath);
 
-        printf("Error executing command\n");
+        perror("Error executing command");
         return 1;
     }else if(pid < 0){
         // Error
@@ -708,7 +708,7 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         free(args);
         free(newPath);
 
-        printf("Error forking\n");
+        perror("Error forking");
         return 1;
     }else{
         // Parent
@@ -717,16 +717,16 @@ int executeCommand(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr,
         waitpid(pid, &status, 0);
 
         if(status != 0){
-            printf("Error executing command\n");
+            perror(newPath);
             return 1;
         }
 
-        if (lastRedirectIn != NULL)
+        if (in != 0)
         {
             close(in);
         }
 
-        if (lastRedirectOut != NULL)
+        if (out != 1)
         {
             close(out);
         }
@@ -794,14 +794,14 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
         // Create pipe
         int pipefd[2];
         if(pipe(pipefd) == -1){
-            printf("Error creating pipe\n");
+            perror("Error creating pipe");
             return 1;
         }
 
         // Fork
         pid_t pid = fork();
         if (pid == -1) {
-            printf("Error forking\n");
+            perror("Error forking");
             return 1;
         } else if (pid == 0) {
             // Child
@@ -814,33 +814,9 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // Parent
             close(pipefd[1]);
 
-            // CD is realistically the only problem if we fork here
-            if(strcmp(pipePtr->next->token, "cd") == 0){
-                // Change directory
-                int status1;
-                waitpid(pid, &status1, 0);
-                
-                int status2 = cd(pipePtr->next, pipefd[0], -1); // -1 is just a placeholder
-                close(pipefd[0]);
-
-                if(in != STDIN_FILENO){
-                    close(in);
-                }
-
-                if(out != STDOUT_FILENO){
-                    close(out);
-                }
-
-                if(status1 != 0 || status2 != 0){
-                    return 1;
-                }
-
-                return 0;
-            }
-
             pid_t newPid = fork();
             if (newPid == -1) {
-                printf("Error forking\n");
+                perror("Error forking");
                 return 1;
             } else if (newPid == 0) {
                 // Child
@@ -894,7 +870,7 @@ char* findPathCommand(char* commandName){
 
         // Check if malloc failed
         if(newPath == NULL){
-            printf("Error allocating memory for path\n");
+            perror("Error allocating memory for path");
             return NULL;
         }
 
