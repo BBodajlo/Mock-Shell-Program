@@ -781,6 +781,12 @@ int executeTokens(tokenList_t *tokenListStartPtr, tokenList_t *tokenListEndPtr, 
             // Parent
             close(pipefd[1]);
 
+            // CD is realistically the only problem if we fork here
+            if(strcmp(pipePtr->next->token, "cd") == 0){
+                // Change directory
+                return cd(pipePtr->next, -1, -1); // -1 is just a placeholder
+            }
+
             pid_t newPid = fork();
             if (newPid == -1) {
                 printf("Error forking\n");
